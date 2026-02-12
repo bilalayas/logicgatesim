@@ -1,5 +1,7 @@
 export type GateType = 'AND' | 'OR' | 'NOT' | 'INPUT' | 'OUTPUT' | 'LED' | 'MODULE';
 
+export type LedShape = 'circle' | 'square' | 'triangle' | 'segment';
+
 export interface CircuitNode {
   id: string;
   type: GateType;
@@ -10,6 +12,9 @@ export interface CircuitNode {
   outputCount: number;
   inputValue?: boolean;
   ledColor?: string;
+  ledShape?: LedShape;
+  ledSize?: number;
+  ledRotation?: number;
   moduleId?: string;
 }
 

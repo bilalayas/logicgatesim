@@ -11,7 +11,7 @@ interface WireLayerProps {
 
 export function WireLayer({ nodes, connections, nodeOutputs, connectingFrom, mouseWorldPos, onDeleteConnection }: WireLayerProps) {
   return (
-    <svg style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, overflow: 'visible' }}>
+    <svg style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, overflow: 'visible', zIndex: 5 }}>
       {connections.map(conn => {
         const fromNode = nodes.find(n => n.id === conn.fromNodeId);
         const toNode = nodes.find(n => n.id === conn.toNodeId);

@@ -155,6 +155,7 @@ export function Canvas() {
               position: 'absolute', width: 20000, height: 20000, left: -10000, top: -10000,
               backgroundImage: `radial-gradient(circle, hsl(228 15% 18%) 1px, transparent 1px)`,
               backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+              zIndex: 0,
             }}
           />
           <WireLayer
@@ -163,15 +164,18 @@ export function Canvas() {
             onDeleteConnection={(id) => dispatch({ type: 'REMOVE_CONNECTION', id })}
           />
           {nodes.map(node => (
-            <GateNode
-              key={node.id} node={node} zoom={zoom}
-              outputs={nodeOutputs[node.id] || []}
-              inputValues={getInputValues(node.id, node.inputCount)}
-              onPinClick={handlePinClick}
-              onMove={(id, x, y) => dispatch({ type: 'MOVE_NODE', id, x, y })}
-              onToggle={(id) => dispatch({ type: 'TOGGLE_INPUT', id })}
-              onDelete={(id) => dispatch({ type: 'REMOVE_NODE', id })}
-            />
+            <div key={node.id} style={{ position: 'relative', zIndex: 10 }}>
+              <GateNode
+                node={node} zoom={zoom}
+                outputs={nodeOutputs[node.id] || []}
+                inputValues={getInputValues(node.id, node.inputCount)}
+                onPinClick={handlePinClick}
+                onMove={(id, x, y) => dispatch({ type: 'MOVE_NODE', id, x, y })}
+                onToggle={(id) => dispatch({ type: 'TOGGLE_INPUT', id })}
+                onDelete={(id) => dispatch({ type: 'REMOVE_NODE', id })}
+                onUpdateNode={(id, updates) => dispatch({ type: 'UPDATE_NODE', id, updates })}
+              />
+            </div>
           ))}
         </div>
       </div>

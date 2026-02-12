@@ -25,7 +25,8 @@ type Action =
   | { type: 'CREATE_MODULE'; module: ModuleDefinition }
   | { type: 'DELETE_MODULE'; id: string }
   | { type: 'LOAD_MODULES'; modules: ModuleDefinition[] }
-  | { type: 'CLEAR_CANVAS' };
+  | { type: 'CLEAR_CANVAS' }
+  | { type: 'UPDATE_NODE'; id: string; updates: Partial<CircuitNode> };
 
 function reducer(state: CircuitState, action: Action): CircuitState {
   switch (action.type) {
@@ -64,6 +65,8 @@ function reducer(state: CircuitState, action: Action): CircuitState {
       return { ...state, modules: action.modules };
     case 'CLEAR_CANVAS':
       return { ...state, nodes: [], connections: [] };
+    case 'UPDATE_NODE':
+      return { ...state, nodes: state.nodes.map(n => n.id === action.id ? { ...n, ...action.updates } : n) };
     default:
       return state;
   }
