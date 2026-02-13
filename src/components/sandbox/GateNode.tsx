@@ -7,6 +7,7 @@ interface GateNodeProps {
   outputs: boolean[];
   inputValues: boolean[];
   zoom: number;
+  isConnecting?: boolean;
   onPinClick: (nodeId: string, pinIndex: number, pinType: 'input' | 'output') => void;
   onMove: (id: string, x: number, y: number) => void;
   onToggle: (id: string) => void;
@@ -22,11 +23,14 @@ const LED_SHAPES: { value: LedShape; label: string }[] = [
   { value: 'segment', label: '━' },
 ];
 
-export function GateNode({ node, outputs, inputValues, zoom, onPinClick, onMove, onToggle, onDelete, onUpdateNode }: GateNodeProps) {
+export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPinClick, onMove, onToggle, onDelete, onUpdateNode }: GateNodeProps) {
   const height = getNodeHeight(node);
   const style = GATE_STYLES[node.type] || GATE_STYLES.AND;
   const dragRef = useRef<{ startX: number; startY: number; nodeX: number; nodeY: number; moved: boolean } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+
+  const pinSize = isConnecting ? 20 : 14;
+  const pinOffset = pinSize / 2;
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.stopPropagation();
@@ -55,17 +59,18 @@ export function GateNode({ node, outputs, inputValues, zoom, onPinClick, onMove,
     const count = type === 'input' ? node.inputCount : node.outputCount;
     return Array.from({ length: count }, (_, i) => {
       const py = (i + 1) * height / (count + 1);
-      const px = type === 'input' ? -7 : NODE_WIDTH - 7;
+      const px = type === 'input' ? -pinOffset : NODE_WIDTH - pinOffset;
       const isHigh = type === 'output' ? (outputs[i] ?? false) : (inputValues[i] ?? false);
       return (
         <div
           key={`${type}-${i}`}
           className="absolute rounded-full cursor-crosshair"
           style={{
-            width: 14, height: 14, left: px, top: py - 7,
+            width: pinSize, height: pinSize, left: px, top: py - pinOffset,
             backgroundColor: isHigh ? 'hsl(152 80% 55%)' : 'hsl(228 10% 35%)',
             border: `2px solid ${isHigh ? 'hsl(152 80% 70%)' : 'hsl(228 10% 50%)'}`,
             zIndex: 10,
+            transition: 'width 0.15s, height 0.15s',
           }}
           onPointerDown={(e) => { e.stopPropagation(); onPinClick(node.id, i, type); }}
         />
@@ -178,7 +183,6 @@ export function GateNode({ node, outputs, inputValues, zoom, onPinClick, onMove,
           }}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          {/* Color */}
           <div>
             <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Color</label>
             <div className="flex gap-1 flex-wrap">
@@ -195,8 +199,6 @@ export function GateNode({ node, outputs, inputValues, zoom, onPinClick, onMove,
               ))}
             </div>
           </div>
-
-          {/* Shape */}
           <div>
             <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Shape</label>
             <div className="flex gap-1">
@@ -216,8 +218,6 @@ export function GateNode({ node, outputs, inputValues, zoom, onPinClick, onMove,
               ))}
             </div>
           </div>
-
-          {/* Size */}
           <div>
             <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>
               Size: {ledSize}px
@@ -229,8 +229,6 @@ export function GateNode({ node, outputs, inputValues, zoom, onPinClick, onMove,
               onChange={(e) => onUpdateNode(node.id, { ledSize: Number(e.target.value) })}
             />
           </div>
-
-          {/* Rotation */}
           <div>
             <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>
               Rotation: {ledRotation}°
