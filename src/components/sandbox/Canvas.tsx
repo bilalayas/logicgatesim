@@ -5,10 +5,10 @@ import { WireLayer } from './WireLayer';
 import { SideMenu } from './SideMenu';
 import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode } from '@/types/circuit';
 import { wouldCreateCycle } from '@/engine/evaluate';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, Undo2, Redo2 } from 'lucide-react';
 
 export function Canvas() {
-  const { state, dispatch, nodeOutputs } = useCircuit();
+  const { state, dispatch, nodeOutputs, undo, redo, canUndo, canRedo } = useCircuit();
   const { nodes, connections, selectedTool, selectedModuleId, panOffset, zoom, modules } = state;
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -96,6 +96,22 @@ export function Canvas() {
     return () => el.removeEventListener('wheel', handler);
   }, [dispatch]);
 
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
   const handlePinClick = useCallback((nodeId: string, pinIndex: number, pinType: 'input' | 'output') => {
     if (!connectingFrom) {
       setConnectingFrom({ nodeId, pinIndex, pinType });
@@ -167,6 +183,7 @@ export function Canvas() {
             <div key={node.id} style={{ position: 'relative', zIndex: 10 }}>
               <GateNode
                 node={node} zoom={zoom}
+                isConnecting={!!connectingFrom}
                 outputs={nodeOutputs[node.id] || []}
                 inputValues={getInputValues(node.id, node.inputCount)}
                 onPinClick={handlePinClick}
@@ -201,6 +218,32 @@ export function Canvas() {
         </div>
       )}
 
+      {/* Undo / Redo buttons */}
+      <div
+        className="fixed bottom-4 left-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
+        style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}
+      >
+        <button
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25"
+          style={{ color: 'hsl(215 10% 55%)' }}
+          disabled={!canUndo}
+          onClick={undo}
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 size={16} />
+        </button>
+        <button
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25"
+          style={{ color: 'hsl(215 10% 55%)' }}
+          disabled={!canRedo}
+          onClick={redo}
+          title="Redo (Ctrl+Y)"
+        >
+          <Redo2 size={16} />
+        </button>
+      </div>
+
+      {/* Zoom controls */}
       <div
         className="fixed bottom-4 right-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
         style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}

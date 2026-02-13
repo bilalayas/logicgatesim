@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCircuit } from '@/context/CircuitContext';
 import { GateType, ModuleDefinition } from '@/types/circuit';
-import { Menu, Plus, Trash2, Zap, ToggleLeft, Lightbulb, Box } from 'lucide-react';
+import { Menu, Plus, Trash2, Zap, ToggleLeft, Lightbulb, Box, ChevronDown, ChevronRight } from 'lucide-react';
 
 const GATE_ITEMS: { type: GateType; label: string; icon: React.ReactNode }[] = [
   { type: 'AND', label: 'AND Gate', icon: <Zap size={16} /> },
@@ -86,24 +86,24 @@ export function SideMenu() {
           transform: open ? 'translateX(0)' : 'translateX(-100%)',
         }}
       >
-        <div className="pt-20 px-4 pb-6 space-y-6">
-          <Section title="Core Gates">
+        <div className="pt-20 px-4 pb-6 space-y-2">
+          <CollapsibleSection title="Core Gates" defaultOpen>
             {GATE_ITEMS.map(item => (
               <ToolButton key={item.type} label={item.label} icon={item.icon} onClick={() => selectTool(item.type)} />
             ))}
-          </Section>
+          </CollapsibleSection>
 
-          <Section title="I/O">
+          <CollapsibleSection title="I/O" defaultOpen>
             {IO_ITEMS.map(item => (
               <ToolButton key={item.type} label={item.label} icon={item.icon} onClick={() => selectTool(item.type)} />
             ))}
-          </Section>
+          </CollapsibleSection>
 
-          <Section title="LED">
+          <CollapsibleSection title="LED" defaultOpen>
             <ToolButton label="LED" icon={<Lightbulb size={16} />} onClick={() => selectTool('LED')} />
-          </Section>
+          </CollapsibleSection>
 
-          <Section title="My Modules">
+          <CollapsibleSection title="My Modules" defaultOpen>
             {state.modules.length === 0 && (
               <p className="text-xs" style={{ color: 'hsl(215 10% 45%)' }}>No modules yet</p>
             )}
@@ -135,7 +135,7 @@ export function SideMenu() {
             >
               <Plus size={14} /> Create Module
             </button>
-          </Section>
+          </CollapsibleSection>
 
           <div className="pt-4 border-t" style={{ borderColor: 'hsl(228 15% 18%)' }}>
             <button
@@ -156,13 +156,19 @@ export function SideMenu() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
     <div>
-      <h3 className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: 'hsl(215 10% 50%)' }}>
+      <button
+        className="w-full flex items-center gap-1 py-2 text-[11px] uppercase tracking-wider font-semibold"
+        style={{ color: 'hsl(215 10% 50%)' }}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         {title}
-      </h3>
-      <div className="space-y-1">{children}</div>
+      </button>
+      {isOpen && <div className="space-y-1 pb-2">{children}</div>}
     </div>
   );
 }

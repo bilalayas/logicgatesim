@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useMemo, useEffect, useCallback, useRef } from 'react';
 import { CircuitNode, Connection, ModuleDefinition, GateType } from '@/types/circuit';
 import { evaluateCircuit } from '@/engine/evaluate';
 
@@ -27,6 +27,14 @@ type Action =
   | { type: 'LOAD_MODULES'; modules: ModuleDefinition[] }
   | { type: 'CLEAR_CANVAS' }
   | { type: 'UPDATE_NODE'; id: string; updates: Partial<CircuitNode> };
+
+// Actions that should be tracked in undo history
+const UNDOABLE_ACTIONS = new Set([
+  'ADD_NODE', 'MOVE_NODE', 'REMOVE_NODE',
+  'ADD_CONNECTION', 'REMOVE_CONNECTION',
+  'TOGGLE_INPUT', 'CREATE_MODULE', 'DELETE_MODULE',
+  'CLEAR_CANVAS', 'UPDATE_NODE',
+]);
 
 function reducer(state: CircuitState, action: Action): CircuitState {
   switch (action.type) {
@@ -72,16 +80,32 @@ function reducer(state: CircuitState, action: Action): CircuitState {
   }
 }
 
+type Snapshot = { nodes: CircuitNode[]; connections: Connection[]; modules: ModuleDefinition[] };
+
+function takeSnapshot(state: CircuitState): Snapshot {
+  return {
+    nodes: state.nodes.map(n => ({ ...n })),
+    connections: state.connections.map(c => ({ ...c })),
+    modules: state.modules.map(m => ({ ...m, nodes: m.nodes.map(n => ({ ...n })), connections: m.connections.map(c => ({ ...c })) })),
+  };
+}
+
 interface CircuitContextType {
   state: CircuitState;
   dispatch: React.Dispatch<Action>;
   nodeOutputs: Record<string, boolean[]>;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const CircuitContext = createContext<CircuitContextType | null>(null);
 
+const MAX_HISTORY = 50;
+
 export function CircuitProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, {
+  const [state, rawDispatch] = useReducer(reducer, {
     nodes: [],
     connections: [],
     modules: [],
@@ -91,6 +115,43 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     zoom: 1,
   });
 
+  const undoStack = useRef<Snapshot[]>([]);
+  const redoStack = useRef<Snapshot[]>([]);
+  const [historyVersion, setHistoryVersion] = React.useState(0);
+
+  const dispatch = useCallback((action: Action) => {
+    if (UNDOABLE_ACTIONS.has(action.type)) {
+      undoStack.current.push(takeSnapshot(state));
+      if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
+      redoStack.current = [];
+      setHistoryVersion(v => v + 1);
+    }
+    rawDispatch(action);
+  }, [state]);
+
+  const undo = useCallback(() => {
+    const prev = undoStack.current.pop();
+    if (!prev) return;
+    redoStack.current.push(takeSnapshot(state));
+    rawDispatch({ type: 'CLEAR_CANVAS' });
+    // Restore by loading snapshot
+    prev.nodes.forEach(n => rawDispatch({ type: 'ADD_NODE', node: n }));
+    prev.connections.forEach(c => rawDispatch({ type: 'ADD_CONNECTION', connection: c }));
+    rawDispatch({ type: 'LOAD_MODULES', modules: prev.modules });
+    setHistoryVersion(v => v + 1);
+  }, [state]);
+
+  const redo = useCallback(() => {
+    const next = redoStack.current.pop();
+    if (!next) return;
+    undoStack.current.push(takeSnapshot(state));
+    rawDispatch({ type: 'CLEAR_CANVAS' });
+    next.nodes.forEach(n => rawDispatch({ type: 'ADD_NODE', node: n }));
+    next.connections.forEach(c => rawDispatch({ type: 'ADD_CONNECTION', connection: c }));
+    rawDispatch({ type: 'LOAD_MODULES', modules: next.modules });
+    setHistoryVersion(v => v + 1);
+  }, [state]);
+
   const nodeOutputs = useMemo(
     () => evaluateCircuit(state.nodes, state.connections, state.modules),
     [state.nodes, state.connections, state.modules]
@@ -99,7 +160,7 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem('logic-sandbox-modules');
     if (saved) {
-      try { dispatch({ type: 'LOAD_MODULES', modules: JSON.parse(saved) }); } catch {}
+      try { rawDispatch({ type: 'LOAD_MODULES', modules: JSON.parse(saved) }); } catch {}
     }
   }, []);
 
@@ -107,8 +168,11 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('logic-sandbox-modules', JSON.stringify(state.modules));
   }, [state.modules]);
 
+  const canUndo = undoStack.current.length > 0;
+  const canRedo = redoStack.current.length > 0;
+
   return (
-    <CircuitContext.Provider value={{ state, dispatch, nodeOutputs }}>
+    <CircuitContext.Provider value={{ state, dispatch, nodeOutputs, undo, redo, canUndo, canRedo }}>
       {children}
     </CircuitContext.Provider>
   );
