@@ -11,7 +11,16 @@ interface WireLayerProps {
 
 export function WireLayer({ nodes, connections, nodeOutputs, connectingFrom, mouseWorldPos, onDeleteConnection }: WireLayerProps) {
   return (
-    <svg style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, overflow: 'visible', zIndex: 5 }}>
+    <svg
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: 99999,
+        height: 99999,
+        zIndex: 5,
+        pointerEvents: 'none',
+      }}
+    >
       {connections.map(conn => {
         const fromNode = nodes.find(n => n.id === conn.fromNodeId);
         const toNode = nodes.find(n => n.id === conn.toNodeId);
@@ -24,7 +33,7 @@ export function WireLayer({ nodes, connections, nodeOutputs, connectingFrom, mou
         return (
           <g key={conn.id}>
             <path d={d} stroke="transparent" strokeWidth={14} fill="none"
-              style={{ cursor: 'pointer' }} pointerEvents="stroke"
+              style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
               onDoubleClick={(e) => { e.stopPropagation(); onDeleteConnection(conn.id); }}
             />
             <path d={d}
