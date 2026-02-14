@@ -3,7 +3,7 @@ import { useCircuit } from '@/context/CircuitContext';
 import { GateNode } from './GateNode';
 import { WireLayer } from './WireLayer';
 import { SideMenu } from './SideMenu';
-import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode, getNodeWidth } from '@/types/circuit';
+import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode, getNodeWidth, PINBAR_THICKNESS } from '@/types/circuit';
 import { Minus, Plus, Undo2, Redo2, Trash2, Play, Pause } from 'lucide-react';
 
 export function Canvas() {
@@ -37,7 +37,7 @@ export function Canvas() {
 
     if (selectedTool) {
       const world = screenToWorld(e.clientX, e.clientY);
-      const toolWidth = selectedTool === 'PINSLOT' ? 40 : NODE_WIDTH;
+      const toolWidth = selectedTool === 'PINBAR' ? PINBAR_THICKNESS : NODE_WIDTH;
       const x = snapToGrid(world.x - toolWidth / 2);
       const y = snapToGrid(world.y - 30);
 
@@ -46,6 +46,12 @@ export function Canvas() {
         const mod = modules.find(m => m.id === selectedModuleId);
         if (!mod) return;
         newNode = { id: crypto.randomUUID(), type: 'MODULE', x, y, label: mod.name, inputCount: mod.inputCount, outputCount: mod.outputCount, moduleId: mod.id };
+      } else if (selectedTool === 'PINBAR') {
+        newNode = {
+          id: crypto.randomUUID(), type: 'PINBAR', x, y,
+          label: 'BAR', inputCount: 0, outputCount: 4,
+          pinBarMode: 'input', pinBarValues: [false, false, false, false],
+        };
       } else {
         const config = GATE_CONFIGS[selectedTool];
         if (!config) return;
@@ -125,7 +131,6 @@ export function Canvas() {
       ? { nodeId: connectingFrom.nodeId, pinIndex: connectingFrom.pinIndex }
       : { nodeId, pinIndex };
 
-    // Allow all connections - cycles will be detected and shown in red
     dispatch({
       type: 'ADD_CONNECTION',
       connection: { id: crypto.randomUUID(), fromNodeId: fromData.nodeId, fromPinIndex: fromData.pinIndex, toNodeId: toData.nodeId, toPinIndex: toData.pinIndex },
@@ -188,6 +193,7 @@ export function Canvas() {
                 onToggle={(id) => dispatch({ type: 'TOGGLE_INPUT', id })}
                 onDelete={(id) => dispatch({ type: 'REMOVE_NODE', id })}
                 onUpdateNode={(id, updates) => dispatch({ type: 'UPDATE_NODE', id, updates })}
+                onTogglePinBarPin={(nodeId, pinIndex) => dispatch({ type: 'TOGGLE_PINBAR_PIN', nodeId, pinIndex })}
               />
             </div>
           ))}
@@ -201,100 +207,39 @@ export function Canvas() {
         className="fixed top-4 right-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
         style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}
       >
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25"
-          style={{ color: 'hsl(215 10% 55%)' }}
-          disabled={!canUndo}
-          onClick={undo}
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo2 size={16} />
-        </button>
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25"
-          style={{ color: 'hsl(215 10% 55%)' }}
-          disabled={!canRedo}
-          onClick={redo}
-          title="Redo (Ctrl+Y)"
-        >
-          <Redo2 size={16} />
-        </button>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25" style={{ color: 'hsl(215 10% 55%)' }} disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25" style={{ color: 'hsl(215 10% 55%)' }} disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Y)"><Redo2 size={16} /></button>
         <div className="w-px h-5 mx-1" style={{ backgroundColor: 'hsl(228 15% 22%)' }} />
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
-          style={{ color: paused ? 'hsl(152 70% 55%)' : 'hsl(45 80% 55%)' }}
-          onClick={togglePause}
-          title={paused ? 'Resume simulation' : 'Pause simulation'}
-        >
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: paused ? 'hsl(152 70% 55%)' : 'hsl(45 80% 55%)' }} onClick={togglePause} title={paused ? 'Resume' : 'Pause'}>
           {paused ? <Play size={16} /> : <Pause size={16} />}
         </button>
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
-          style={{ color: 'hsl(0 60% 55%)' }}
-          onClick={clearCanvas}
-          title="Clear canvas"
-        >
-          <Trash2 size={16} />
-        </button>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: 'hsl(0 60% 55%)' }} onClick={clearCanvas} title="Clear canvas"><Trash2 size={16} /></button>
       </div>
 
-      {/* Cycle warning */}
       {cycleConnectionIds.length > 0 && (
-        <div
-          className="fixed top-16 right-4 z-30 px-4 py-2 rounded-lg text-xs font-medium max-w-64"
-          style={{ backgroundColor: 'hsl(0 50% 15%)', color: 'hsl(0 70% 70%)', border: '1px solid hsl(0 40% 30%)' }}
-        >
-          ⚠ Cycle detected — {cycleConnectionIds.length} connection{cycleConnectionIds.length > 1 ? 's' : ''} shown in red. Remove cyclic wires to resume.
-          <button
-            className="ml-2 underline opacity-70 hover:opacity-100"
-            onClick={() => dispatch({ type: 'SET_PAUSED', paused: false })}
-          >
-            Force resume
-          </button>
+        <div className="fixed top-16 right-4 z-30 px-4 py-2 rounded-lg text-xs font-medium max-w-64" style={{ backgroundColor: 'hsl(0 50% 15%)', color: 'hsl(0 70% 70%)', border: '1px solid hsl(0 40% 30%)' }}>
+          ⚠ Cycle — {cycleConnectionIds.length} wire{cycleConnectionIds.length > 1 ? 's' : ''} in red. Remove to resume.
+          <button className="ml-2 underline opacity-70 hover:opacity-100" onClick={() => dispatch({ type: 'SET_PAUSED', paused: false })}>Force resume</button>
         </div>
       )}
 
       {selectedTool && (
-        <div
-          className="fixed top-4 left-20 z-30 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
-          style={{ backgroundColor: 'hsl(152 60% 30%)', color: 'hsl(152 60% 95%)', border: '1px solid hsl(152 60% 40%)' }}
-        >
+        <div className="fixed top-4 left-20 z-30 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2" style={{ backgroundColor: 'hsl(152 60% 30%)', color: 'hsl(152 60% 95%)', border: '1px solid hsl(152 60% 40%)' }}>
           Click to place: {selectedTool}
           <button className="hover:opacity-70 ml-1" onClick={() => dispatch({ type: 'SET_TOOL', tool: null })}>✕</button>
         </div>
       )}
 
       {connectingFrom && (
-        <div
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg text-sm font-medium"
-          style={{ backgroundColor: 'hsl(45 80% 25%)', color: 'hsl(45 80% 85%)', border: '1px solid hsl(45 80% 40%)' }}
-        >
-          Click a {connectingFrom.pinType === 'output' ? 'input' : 'output'} pin to connect • Click empty space to cancel
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg text-sm font-medium" style={{ backgroundColor: 'hsl(45 80% 25%)', color: 'hsl(45 80% 85%)', border: '1px solid hsl(45 80% 40%)' }}>
+          Click a {connectingFrom.pinType === 'output' ? 'input' : 'output'} pin to connect
         </div>
       )}
 
-      {/* Zoom controls */}
-      <div
-        className="fixed bottom-4 right-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
-        style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}
-      >
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
-          style={{ color: 'hsl(215 10% 55%)' }}
-          onClick={() => dispatch({ type: 'SET_ZOOM', zoom: zoom - 0.1 })}
-        >
-          <Minus size={16} />
-        </button>
-        <span className="text-xs w-12 text-center" style={{ color: 'hsl(215 10% 55%)' }}>
-          {Math.round(zoom * 100)}%
-        </span>
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
-          style={{ color: 'hsl(215 10% 55%)' }}
-          onClick={() => dispatch({ type: 'SET_ZOOM', zoom: zoom + 0.1 })}
-        >
-          <Plus size={16} />
-        </button>
+      <div className="fixed bottom-4 right-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30" style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: 'hsl(215 10% 55%)' }} onClick={() => dispatch({ type: 'SET_ZOOM', zoom: zoom - 0.1 })}><Minus size={16} /></button>
+        <span className="text-xs w-12 text-center" style={{ color: 'hsl(215 10% 55%)' }}>{Math.round(zoom * 100)}%</span>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: 'hsl(215 10% 55%)' }} onClick={() => dispatch({ type: 'SET_ZOOM', zoom: zoom + 0.1 })}><Plus size={16} /></button>
       </div>
     </div>
   );

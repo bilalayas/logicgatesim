@@ -28,13 +28,14 @@ type Action =
   | { type: 'LOAD_MODULES'; modules: ModuleDefinition[] }
   | { type: 'CLEAR_CANVAS' }
   | { type: 'UPDATE_NODE'; id: string; updates: Partial<CircuitNode> }
-  | { type: 'SET_PAUSED'; paused: boolean };
+  | { type: 'SET_PAUSED'; paused: boolean }
+  | { type: 'TOGGLE_PINBAR_PIN'; nodeId: string; pinIndex: number };
 
 const UNDOABLE_ACTIONS = new Set([
   'ADD_NODE', 'MOVE_NODE', 'REMOVE_NODE',
   'ADD_CONNECTION', 'REMOVE_CONNECTION',
   'TOGGLE_INPUT', 'CREATE_MODULE', 'DELETE_MODULE',
-  'CLEAR_CANVAS', 'UPDATE_NODE',
+  'CLEAR_CANVAS', 'UPDATE_NODE', 'TOGGLE_PINBAR_PIN',
 ]);
 
 function reducer(state: CircuitState, action: Action): CircuitState {
@@ -74,10 +75,33 @@ function reducer(state: CircuitState, action: Action): CircuitState {
       return { ...state, modules: action.modules };
     case 'CLEAR_CANVAS':
       return { ...state, nodes: [], connections: [], paused: false };
-    case 'UPDATE_NODE':
-      return { ...state, nodes: state.nodes.map(n => n.id === action.id ? { ...n, ...action.updates } : n) };
+    case 'UPDATE_NODE': {
+      const existing = state.nodes.find(n => n.id === action.id);
+      if (!existing) return state;
+      const updated = { ...existing, ...action.updates };
+      let conns = state.connections;
+      // Clean up connections if pin count decreased
+      if (action.updates.inputCount !== undefined && action.updates.inputCount < existing.inputCount) {
+        conns = conns.filter(c => !(c.toNodeId === action.id && c.toPinIndex >= action.updates.inputCount!));
+      }
+      if (action.updates.outputCount !== undefined && action.updates.outputCount < existing.outputCount) {
+        conns = conns.filter(c => !(c.fromNodeId === action.id && c.fromPinIndex >= action.updates.outputCount!));
+      }
+      return { ...state, nodes: state.nodes.map(n => n.id === action.id ? updated : n), connections: conns };
+    }
     case 'SET_PAUSED':
       return { ...state, paused: action.paused };
+    case 'TOGGLE_PINBAR_PIN': {
+      return {
+        ...state,
+        nodes: state.nodes.map(n => {
+          if (n.id !== action.nodeId) return n;
+          const vals = [...(n.pinBarValues || Array(n.outputCount).fill(false))];
+          vals[action.pinIndex] = !vals[action.pinIndex];
+          return { ...n, pinBarValues: vals };
+        }),
+      };
+    }
     default:
       return state;
   }
@@ -162,7 +186,6 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     [state.nodes, state.connections]
   );
 
-  // Auto-pause when cycles detected
   useEffect(() => {
     if (cycleConnectionIds.length > 0 && !state.paused) {
       rawDispatch({ type: 'SET_PAUSED', paused: true });
