@@ -7,7 +7,6 @@ export function evaluateCircuit(
 ): Record<string, boolean[]> {
   const outputs: Record<string, boolean[]> = {};
 
-  // Build adjacency
   const outEdges: Record<string, Set<string>> = {};
   const inEdges: Record<string, Set<string>> = {};
   for (const node of nodes) {
@@ -21,7 +20,6 @@ export function evaluateCircuit(
     }
   }
 
-  // Kahn's topological sort
   const inDegree: Record<string, number> = {};
   for (const node of nodes) inDegree[node.id] = inEdges[node.id]?.size || 0;
 
@@ -40,7 +38,6 @@ export function evaluateCircuit(
     }
   }
 
-  // Evaluate
   for (const nodeId of sorted) {
     const node = nodes.find(n => n.id === nodeId);
     if (!node) continue;
@@ -72,13 +69,20 @@ export function evaluateCircuit(
       case 'LED':
         outputs[nodeId] = [inputValues[0] ?? false];
         break;
-      case 'PINSLOT': {
-        // Pass-through: each output = corresponding input
-        const result: boolean[] = [];
-        for (let i = 0; i < node.outputCount; i++) {
-          result.push(inputValues[i] ?? false);
+      case 'PINBAR': {
+        const mode = node.pinBarMode || 'input';
+        if (mode === 'input') {
+          // Input bar: each output = pinBarValues toggle state
+          const vals = node.pinBarValues || [];
+          const result: boolean[] = [];
+          for (let i = 0; i < node.outputCount; i++) {
+            result.push(vals[i] ?? false);
+          }
+          outputs[nodeId] = result;
+        } else {
+          // Output bar: pass through inputs
+          outputs[nodeId] = inputValues.slice(0, node.inputCount);
         }
-        outputs[nodeId] = result;
         break;
       }
       case 'MODULE': {
@@ -146,7 +150,6 @@ export function detectCycleConnections(
   }
 
   const cycleNodes = new Set(nodes.filter(n => !processed.has(n.id)).map(n => n.id));
-
   return connections
     .filter(c => cycleNodes.has(c.fromNodeId) && cycleNodes.has(c.toNodeId))
     .map(c => c.id);
@@ -170,9 +173,7 @@ export function wouldCreateCycle(
     if (current === fromNodeId) return true;
     if (visited.has(current)) continue;
     visited.add(current);
-    for (const next of adj[current] || []) {
-      q.push(next);
-    }
+    for (const next of adj[current] || []) q.push(next);
   }
   return false;
 }

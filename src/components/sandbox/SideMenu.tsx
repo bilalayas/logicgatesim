@@ -28,26 +28,18 @@ export function SideMenu() {
     const { nodes, connections } = state;
     const inputNodes = nodes.filter(n => n.type === 'INPUT');
     const outputNodes = nodes.filter(n => n.type === 'OUTPUT');
-
     if (inputNodes.length === 0 || outputNodes.length === 0) {
       alert('You need at least one INPUT and one OUTPUT node to create a module.');
       return;
     }
-
     const name = prompt('Module name:');
     if (!name?.trim()) return;
-
     const module: ModuleDefinition = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      nodes: nodes.map(n => ({ ...n })),
-      connections: connections.map(c => ({ ...c })),
-      inputNodeIds: inputNodes.map(n => n.id),
-      outputNodeIds: outputNodes.map(n => n.id),
-      inputCount: inputNodes.length,
-      outputCount: outputNodes.length,
+      id: crypto.randomUUID(), name: name.trim(),
+      nodes: nodes.map(n => ({ ...n })), connections: connections.map(c => ({ ...c })),
+      inputNodeIds: inputNodes.map(n => n.id), outputNodeIds: outputNodes.map(n => n.id),
+      inputCount: inputNodes.length, outputCount: outputNodes.length,
     };
-
     dispatch({ type: 'CREATE_MODULE', module });
     alert(`Module "${name}" created!`);
   };
@@ -62,7 +54,7 @@ export function SideMenu() {
   const filteredGates = GATE_ITEMS.filter(i => i.label.toLowerCase().includes(q));
   const filteredIO = IO_ITEMS.filter(i => i.label.toLowerCase().includes(q));
   const showLed = 'led'.includes(q) || !q;
-  const showPinSlot = 'pinslot'.includes(q) || 'bus'.includes(q) || !q;
+  const showPinBar = 'pin bar'.includes(q) || 'pinbar'.includes(q) || 'bar'.includes(q) || !q;
   const filteredModules = state.modules.filter(m => m.name.toLowerCase().includes(q));
 
   return (
@@ -70,39 +62,22 @@ export function SideMenu() {
       <button
         onClick={() => setOpen(!open)}
         className="fixed top-4 left-4 z-50 w-12 h-12 rounded-lg flex items-center justify-center transition-colors"
-        style={{
-          backgroundColor: 'hsl(228 18% 12%)',
-          border: '1px solid hsl(228 15% 22%)',
-          color: 'hsl(210 15% 88%)',
-        }}
+        style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)', color: 'hsl(210 15% 88%)' }}
       >
         <Menu size={22} />
       </button>
 
       <div
         className="fixed top-0 left-0 h-full z-40 overflow-y-auto transition-transform duration-200"
-        style={{
-          width: 260,
-          backgroundColor: 'hsl(228 18% 10%)',
-          borderRight: '1px solid hsl(228 15% 20%)',
-          transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        }}
+        style={{ width: 260, backgroundColor: 'hsl(228 18% 10%)', borderRight: '1px solid hsl(228 15% 20%)', transform: open ? 'translateX(0)' : 'translateX(-100%)' }}
       >
         <div className="pt-20 px-4 pb-6 space-y-2">
-          {/* Search */}
           <div className="relative mb-3">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'hsl(215 10% 40%)' }} />
             <input
-              type="text"
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-2 rounded-md text-sm outline-none"
-              style={{
-                backgroundColor: 'hsl(228 15% 14%)',
-                border: '1px solid hsl(228 15% 22%)',
-                color: 'hsl(210 15% 82%)',
-              }}
+              style={{ backgroundColor: 'hsl(228 15% 14%)', border: '1px solid hsl(228 15% 22%)', color: 'hsl(210 15% 82%)' }}
             />
           </div>
 
@@ -128,45 +103,23 @@ export function SideMenu() {
             </CollapsibleSection>
           )}
 
-          {showPinSlot && (
+          {showPinBar && (
             <CollapsibleSection title="Connectors" defaultOpen>
-              <ToolButton label="Pin Slot (4-Bus)" icon={<Cable size={16} />} onClick={() => selectTool('PINSLOT')} />
+              <ToolButton label="Pin Bar" icon={<Cable size={16} />} onClick={() => selectTool('PINBAR')} />
             </CollapsibleSection>
           )}
 
           <CollapsibleSection title="My Modules" defaultOpen>
-            {filteredModules.length === 0 && !q && (
-              <p className="text-xs" style={{ color: 'hsl(215 10% 45%)' }}>No modules yet</p>
-            )}
-            {filteredModules.length === 0 && q && (
-              <p className="text-xs" style={{ color: 'hsl(215 10% 45%)' }}>No matching modules</p>
-            )}
+            {filteredModules.length === 0 && <p className="text-xs" style={{ color: 'hsl(215 10% 45%)' }}>{q ? 'No match' : 'No modules yet'}</p>}
             {filteredModules.map(m => (
               <div key={m.id} className="flex items-center gap-1 group/mod">
-                <ToolButton
-                  label={`${m.name} (${m.inputCount}→${m.outputCount})`}
-                  icon={<Box size={16} />}
-                  onClick={() => selectTool('MODULE', m.id)}
-                  className="flex-1 min-w-0"
-                />
-                <button
-                  className="p-1 rounded opacity-0 group-hover/mod:opacity-100 transition-opacity shrink-0"
-                  style={{ color: 'hsl(0 70% 55%)' }}
-                  onClick={() => deleteModule(m.id, m.name)}
-                >
+                <ToolButton label={`${m.name} (${m.inputCount}→${m.outputCount})`} icon={<Box size={16} />} onClick={() => selectTool('MODULE', m.id)} className="flex-1 min-w-0" />
+                <button className="p-1 rounded opacity-0 group-hover/mod:opacity-100 transition-opacity shrink-0" style={{ color: 'hsl(0 70% 55%)' }} onClick={() => deleteModule(m.id, m.name)}>
                   <Trash2 size={14} />
                 </button>
               </div>
             ))}
-            <button
-              className="w-full mt-2 py-2 rounded-md text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-              style={{
-                backgroundColor: 'hsl(152 60% 25%)',
-                color: 'hsl(152 60% 90%)',
-                border: '1px solid hsl(152 60% 35%)',
-              }}
-              onClick={createModule}
-            >
+            <button className="w-full mt-2 py-2 rounded-md text-xs font-medium flex items-center justify-center gap-1 transition-colors" style={{ backgroundColor: 'hsl(152 60% 25%)', color: 'hsl(152 60% 90%)', border: '1px solid hsl(152 60% 35%)' }} onClick={createModule}>
               <Plus size={14} /> Create Module
             </button>
           </CollapsibleSection>
@@ -180,11 +133,7 @@ function CollapsibleSection({ title, children, defaultOpen = true }: { title: st
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
     <div>
-      <button
-        className="w-full flex items-center gap-1 py-2 text-[11px] uppercase tracking-wider font-semibold"
-        style={{ color: 'hsl(215 10% 50%)' }}
-        onClick={() => setIsOpen(!isOpen)}
-      >
+      <button className="w-full flex items-center gap-1 py-2 text-[11px] uppercase tracking-wider font-semibold" style={{ color: 'hsl(215 10% 50%)' }} onClick={() => setIsOpen(!isOpen)}>
         {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         {title}
       </button>

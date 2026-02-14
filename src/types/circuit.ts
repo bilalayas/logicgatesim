@@ -1,4 +1,4 @@
-export type GateType = 'AND' | 'OR' | 'NOT' | 'INPUT' | 'OUTPUT' | 'LED' | 'MODULE' | 'PINSLOT';
+export type GateType = 'AND' | 'OR' | 'NOT' | 'INPUT' | 'OUTPUT' | 'LED' | 'MODULE' | 'PINBAR';
 
 export type LedShape = 'circle' | 'square' | 'triangle' | 'segment';
 
@@ -16,7 +16,14 @@ export interface CircuitNode {
   ledSize?: number;
   ledRotation?: number;
   moduleId?: string;
-  pinSlotRotation?: number;
+  // Pin naming
+  pinNames?: Record<string, string>; // e.g. "input-0" -> "A", "output-1" -> "Q"
+  showPinNames?: boolean;
+  // PinBar specific
+  pinBarMode?: 'input' | 'output';
+  pinBarValues?: boolean[]; // toggle state for input-mode PinBar
+  // Rotation (0, 90, 180, 270)
+  rotation?: number;
 }
 
 export interface Connection {
@@ -40,7 +47,7 @@ export interface ModuleDefinition {
 
 export const GRID_SIZE = 20;
 export const NODE_WIDTH = 120;
-export const PINSLOT_WIDTH = 40;
+export const PINBAR_THICKNESS = 30;
 
 export const GATE_CONFIGS: Record<string, { label: string; inputCount: number; outputCount: number }> = {
   AND: { label: 'AND', inputCount: 2, outputCount: 1 },
@@ -49,26 +56,76 @@ export const GATE_CONFIGS: Record<string, { label: string; inputCount: number; o
   INPUT: { label: 'INPUT', inputCount: 0, outputCount: 1 },
   OUTPUT: { label: 'OUTPUT', inputCount: 1, outputCount: 0 },
   LED: { label: 'LED', inputCount: 1, outputCount: 0 },
-  PINSLOT: { label: 'BUS', inputCount: 4, outputCount: 4 },
+  PINBAR: { label: 'BAR', inputCount: 0, outputCount: 4 },
 };
 
-export function getNodeHeight(node: CircuitNode): number {
+export function getNodeDimensions(node: CircuitNode): { width: number; height: number } {
+  if (node.type === 'PINBAR') {
+    const count = Math.max(node.inputCount, node.outputCount, 1);
+    const barLength = count * 28 + 12;
+    const rot = node.rotation || 0;
+    if (rot === 90 || rot === 270) return { width: barLength, height: PINBAR_THICKNESS };
+    return { width: PINBAR_THICKNESS, height: barLength };
+  }
+  if (node.type === 'MODULE' && (node.rotation === 90 || node.rotation === 270)) {
+    const maxPins = Math.max(node.inputCount, node.outputCount, 1);
+    const h = Math.max(60, maxPins * 30 + 10);
+    return { width: h, height: NODE_WIDTH };
+  }
   const maxPins = Math.max(node.inputCount, node.outputCount, 1);
-  return Math.max(60, maxPins * 30 + 10);
+  return { width: NODE_WIDTH, height: Math.max(60, maxPins * 30 + 10) };
+}
+
+export function getNodeHeight(node: CircuitNode): number {
+  return getNodeDimensions(node).height;
 }
 
 export function getNodeWidth(node: CircuitNode): number {
-  if (node.type === 'PINSLOT') return PINSLOT_WIDTH;
-  return NODE_WIDTH;
+  return getNodeDimensions(node).width;
 }
 
 export function getPinPosition(node: CircuitNode, pinType: 'input' | 'output', pinIndex: number): { x: number; y: number } {
-  const h = getNodeHeight(node);
-  const w = getNodeWidth(node);
+  const { width, height } = getNodeDimensions(node);
   const count = pinType === 'input' ? node.inputCount : node.outputCount;
+  const rot = node.rotation || 0;
+
+  if (node.type === 'PINBAR') {
+    // PinBar: pins along one edge based on rotation
+    if (rot === 0) { // vertical, pins on right
+      return { x: node.x + width, y: node.y + (pinIndex + 1) * height / (count + 1) };
+    } else if (rot === 90) { // horizontal, pins on bottom
+      return { x: node.x + (pinIndex + 1) * width / (count + 1), y: node.y + height };
+    } else if (rot === 180) { // vertical, pins on left
+      return { x: node.x, y: node.y + (pinIndex + 1) * height / (count + 1) };
+    } else { // 270, horizontal, pins on top
+      return { x: node.x + (pinIndex + 1) * width / (count + 1), y: node.y };
+    }
+  }
+
+  if (node.type === 'MODULE' && rot !== 0) {
+    if (rot === 90) { // inputs top, outputs bottom
+      const c = count;
+      return {
+        x: node.x + (pinIndex + 1) * width / (c + 1),
+        y: node.y + (pinType === 'input' ? 0 : height),
+      };
+    } else if (rot === 180) { // inputs right, outputs left
+      return {
+        x: node.x + (pinType === 'input' ? width : 0),
+        y: node.y + (pinIndex + 1) * height / (count + 1),
+      };
+    } else if (rot === 270) { // inputs bottom, outputs top
+      return {
+        x: node.x + (pinIndex + 1) * width / (count + 1),
+        y: node.y + (pinType === 'input' ? height : 0),
+      };
+    }
+  }
+
+  // Default: inputs left, outputs right
   return {
-    x: node.x + (pinType === 'input' ? 0 : w),
-    y: node.y + (pinIndex + 1) * h / (count + 1),
+    x: node.x + (pinType === 'input' ? 0 : width),
+    y: node.y + (pinIndex + 1) * height / (count + 1),
   };
 }
 
@@ -84,5 +141,5 @@ export const GATE_STYLES: Record<string, { bg: string; border: string }> = {
   OUTPUT: { bg: 'hsl(185 55% 18%)', border: 'hsl(185 70% 45%)' },
   LED: { bg: 'transparent', border: 'transparent' },
   MODULE: { bg: 'hsl(45 35% 20%)', border: 'hsl(45 40% 42%)' },
-  PINSLOT: { bg: 'hsl(228 20% 18%)', border: 'hsl(228 15% 30%)' },
+  PINBAR: { bg: 'hsl(220 30% 22%)', border: 'hsl(220 30% 38%)' },
 };
