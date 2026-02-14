@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCircuit } from '@/context/CircuitContext';
 import { GateType, ModuleDefinition } from '@/types/circuit';
-import { Menu, Plus, Trash2, Zap, ToggleLeft, Lightbulb, Box, ChevronDown, ChevronRight } from 'lucide-react';
+import { Menu, Plus, Trash2, Zap, ToggleLeft, Lightbulb, Box, ChevronDown, ChevronRight, Search, Cable } from 'lucide-react';
 
 const GATE_ITEMS: { type: GateType; label: string; icon: React.ReactNode }[] = [
   { type: 'AND', label: 'AND Gate', icon: <Zap size={16} /> },
@@ -17,6 +17,7 @@ const IO_ITEMS: { type: GateType; label: string; icon: React.ReactNode }[] = [
 export function SideMenu() {
   const { state, dispatch } = useCircuit();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   const selectTool = (tool: GateType, moduleId?: string) => {
     dispatch({ type: 'SET_TOOL', tool, moduleId: moduleId || null });
@@ -57,11 +58,12 @@ export function SideMenu() {
     }
   };
 
-  const clearCanvas = () => {
-    if (state.nodes.length === 0 || confirm('Clear all nodes and connections?')) {
-      dispatch({ type: 'CLEAR_CANVAS' });
-    }
-  };
+  const q = search.toLowerCase();
+  const filteredGates = GATE_ITEMS.filter(i => i.label.toLowerCase().includes(q));
+  const filteredIO = IO_ITEMS.filter(i => i.label.toLowerCase().includes(q));
+  const showLed = 'led'.includes(q) || !q;
+  const showPinSlot = 'pinslot'.includes(q) || 'bus'.includes(q) || !q;
+  const filteredModules = state.modules.filter(m => m.name.toLowerCase().includes(q));
 
   return (
     <>
@@ -87,36 +89,68 @@ export function SideMenu() {
         }}
       >
         <div className="pt-20 px-4 pb-6 space-y-2">
-          <CollapsibleSection title="Core Gates" defaultOpen>
-            {GATE_ITEMS.map(item => (
-              <ToolButton key={item.type} label={item.label} icon={item.icon} onClick={() => selectTool(item.type)} />
-            ))}
-          </CollapsibleSection>
+          {/* Search */}
+          <div className="relative mb-3">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'hsl(215 10% 40%)' }} />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 rounded-md text-sm outline-none"
+              style={{
+                backgroundColor: 'hsl(228 15% 14%)',
+                border: '1px solid hsl(228 15% 22%)',
+                color: 'hsl(210 15% 82%)',
+              }}
+            />
+          </div>
 
-          <CollapsibleSection title="I/O" defaultOpen>
-            {IO_ITEMS.map(item => (
-              <ToolButton key={item.type} label={item.label} icon={item.icon} onClick={() => selectTool(item.type)} />
-            ))}
-          </CollapsibleSection>
+          {filteredGates.length > 0 && (
+            <CollapsibleSection title="Core Gates" defaultOpen>
+              {filteredGates.map(item => (
+                <ToolButton key={item.type} label={item.label} icon={item.icon} onClick={() => selectTool(item.type)} />
+              ))}
+            </CollapsibleSection>
+          )}
 
-          <CollapsibleSection title="LED" defaultOpen>
-            <ToolButton label="LED" icon={<Lightbulb size={16} />} onClick={() => selectTool('LED')} />
-          </CollapsibleSection>
+          {filteredIO.length > 0 && (
+            <CollapsibleSection title="I/O" defaultOpen>
+              {filteredIO.map(item => (
+                <ToolButton key={item.type} label={item.label} icon={item.icon} onClick={() => selectTool(item.type)} />
+              ))}
+            </CollapsibleSection>
+          )}
+
+          {showLed && (
+            <CollapsibleSection title="LED" defaultOpen>
+              <ToolButton label="LED" icon={<Lightbulb size={16} />} onClick={() => selectTool('LED')} />
+            </CollapsibleSection>
+          )}
+
+          {showPinSlot && (
+            <CollapsibleSection title="Connectors" defaultOpen>
+              <ToolButton label="Pin Slot (4-Bus)" icon={<Cable size={16} />} onClick={() => selectTool('PINSLOT')} />
+            </CollapsibleSection>
+          )}
 
           <CollapsibleSection title="My Modules" defaultOpen>
-            {state.modules.length === 0 && (
+            {filteredModules.length === 0 && !q && (
               <p className="text-xs" style={{ color: 'hsl(215 10% 45%)' }}>No modules yet</p>
             )}
-            {state.modules.map(m => (
-              <div key={m.id} className="flex items-center gap-1">
+            {filteredModules.length === 0 && q && (
+              <p className="text-xs" style={{ color: 'hsl(215 10% 45%)' }}>No matching modules</p>
+            )}
+            {filteredModules.map(m => (
+              <div key={m.id} className="flex items-center gap-1 group/mod">
                 <ToolButton
                   label={`${m.name} (${m.inputCount}→${m.outputCount})`}
                   icon={<Box size={16} />}
                   onClick={() => selectTool('MODULE', m.id)}
-                  className="flex-1"
+                  className="flex-1 min-w-0"
                 />
                 <button
-                  className="p-1 rounded opacity-50 hover:opacity-100"
+                  className="p-1 rounded opacity-0 group-hover/mod:opacity-100 transition-opacity shrink-0"
                   style={{ color: 'hsl(0 70% 55%)' }}
                   onClick={() => deleteModule(m.id, m.name)}
                 >
@@ -136,20 +170,6 @@ export function SideMenu() {
               <Plus size={14} /> Create Module
             </button>
           </CollapsibleSection>
-
-          <div className="pt-4 border-t" style={{ borderColor: 'hsl(228 15% 18%)' }}>
-            <button
-              className="w-full py-2 rounded-md text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: 'hsl(0 50% 20%)',
-                color: 'hsl(0 70% 70%)',
-                border: '1px solid hsl(0 40% 30%)',
-              }}
-              onClick={clearCanvas}
-            >
-              Clear Canvas
-            </button>
-          </div>
         </div>
       </div>
     </>
@@ -182,7 +202,8 @@ function ToolButton({ label, icon, onClick, className = '' }: { label: string; i
       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
       onClick={onClick}
     >
-      {icon} {label}
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }

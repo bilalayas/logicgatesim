@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useMemo, useEffect, useCallback, useRef } from 'react';
 import { CircuitNode, Connection, ModuleDefinition, GateType } from '@/types/circuit';
-import { evaluateCircuit } from '@/engine/evaluate';
+import { evaluateCircuit, detectCycleConnections } from '@/engine/evaluate';
 
 interface CircuitState {
   nodes: CircuitNode[];
@@ -10,6 +10,7 @@ interface CircuitState {
   selectedModuleId: string | null;
   panOffset: { x: number; y: number };
   zoom: number;
+  paused: boolean;
 }
 
 type Action =
@@ -26,9 +27,9 @@ type Action =
   | { type: 'DELETE_MODULE'; id: string }
   | { type: 'LOAD_MODULES'; modules: ModuleDefinition[] }
   | { type: 'CLEAR_CANVAS' }
-  | { type: 'UPDATE_NODE'; id: string; updates: Partial<CircuitNode> };
+  | { type: 'UPDATE_NODE'; id: string; updates: Partial<CircuitNode> }
+  | { type: 'SET_PAUSED'; paused: boolean };
 
-// Actions that should be tracked in undo history
 const UNDOABLE_ACTIONS = new Set([
   'ADD_NODE', 'MOVE_NODE', 'REMOVE_NODE',
   'ADD_CONNECTION', 'REMOVE_CONNECTION',
@@ -72,9 +73,11 @@ function reducer(state: CircuitState, action: Action): CircuitState {
     case 'LOAD_MODULES':
       return { ...state, modules: action.modules };
     case 'CLEAR_CANVAS':
-      return { ...state, nodes: [], connections: [] };
+      return { ...state, nodes: [], connections: [], paused: false };
     case 'UPDATE_NODE':
       return { ...state, nodes: state.nodes.map(n => n.id === action.id ? { ...n, ...action.updates } : n) };
+    case 'SET_PAUSED':
+      return { ...state, paused: action.paused };
     default:
       return state;
   }
@@ -94,6 +97,7 @@ interface CircuitContextType {
   state: CircuitState;
   dispatch: React.Dispatch<Action>;
   nodeOutputs: Record<string, boolean[]>;
+  cycleConnectionIds: string[];
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -113,11 +117,13 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     selectedModuleId: null,
     panOffset: { x: 0, y: 0 },
     zoom: 1,
+    paused: false,
   });
 
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
   const [historyVersion, setHistoryVersion] = React.useState(0);
+  const lastOutputsRef = useRef<Record<string, boolean[]>>({});
 
   const dispatch = useCallback((action: Action) => {
     if (UNDOABLE_ACTIONS.has(action.type)) {
@@ -134,7 +140,6 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     if (!prev) return;
     redoStack.current.push(takeSnapshot(state));
     rawDispatch({ type: 'CLEAR_CANVAS' });
-    // Restore by loading snapshot
     prev.nodes.forEach(n => rawDispatch({ type: 'ADD_NODE', node: n }));
     prev.connections.forEach(c => rawDispatch({ type: 'ADD_CONNECTION', connection: c }));
     rawDispatch({ type: 'LOAD_MODULES', modules: prev.modules });
@@ -152,10 +157,24 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     setHistoryVersion(v => v + 1);
   }, [state]);
 
-  const nodeOutputs = useMemo(
-    () => evaluateCircuit(state.nodes, state.connections, state.modules),
-    [state.nodes, state.connections, state.modules]
+  const cycleConnectionIds = useMemo(
+    () => detectCycleConnections(state.nodes, state.connections),
+    [state.nodes, state.connections]
   );
+
+  // Auto-pause when cycles detected
+  useEffect(() => {
+    if (cycleConnectionIds.length > 0 && !state.paused) {
+      rawDispatch({ type: 'SET_PAUSED', paused: true });
+    }
+  }, [cycleConnectionIds, state.paused]);
+
+  const nodeOutputs = useMemo(() => {
+    if (state.paused) return lastOutputsRef.current;
+    const result = evaluateCircuit(state.nodes, state.connections, state.modules);
+    lastOutputsRef.current = result;
+    return result;
+  }, [state.nodes, state.connections, state.modules, state.paused]);
 
   useEffect(() => {
     const saved = localStorage.getItem('logic-sandbox-modules');
@@ -172,7 +191,7 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
   const canRedo = redoStack.current.length > 0;
 
   return (
-    <CircuitContext.Provider value={{ state, dispatch, nodeOutputs, undo, redo, canUndo, canRedo }}>
+    <CircuitContext.Provider value={{ state, dispatch, nodeOutputs, cycleConnectionIds, undo, redo, canUndo, canRedo }}>
       {children}
     </CircuitContext.Provider>
   );

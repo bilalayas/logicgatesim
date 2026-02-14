@@ -1,4 +1,4 @@
-export type GateType = 'AND' | 'OR' | 'NOT' | 'INPUT' | 'OUTPUT' | 'LED' | 'MODULE';
+export type GateType = 'AND' | 'OR' | 'NOT' | 'INPUT' | 'OUTPUT' | 'LED' | 'MODULE' | 'PINSLOT';
 
 export type LedShape = 'circle' | 'square' | 'triangle' | 'segment';
 
@@ -16,6 +16,7 @@ export interface CircuitNode {
   ledSize?: number;
   ledRotation?: number;
   moduleId?: string;
+  pinSlotRotation?: number;
 }
 
 export interface Connection {
@@ -39,6 +40,7 @@ export interface ModuleDefinition {
 
 export const GRID_SIZE = 20;
 export const NODE_WIDTH = 120;
+export const PINSLOT_WIDTH = 40;
 
 export const GATE_CONFIGS: Record<string, { label: string; inputCount: number; outputCount: number }> = {
   AND: { label: 'AND', inputCount: 2, outputCount: 1 },
@@ -47,6 +49,7 @@ export const GATE_CONFIGS: Record<string, { label: string; inputCount: number; o
   INPUT: { label: 'INPUT', inputCount: 0, outputCount: 1 },
   OUTPUT: { label: 'OUTPUT', inputCount: 1, outputCount: 0 },
   LED: { label: 'LED', inputCount: 1, outputCount: 0 },
+  PINSLOT: { label: 'BUS', inputCount: 4, outputCount: 4 },
 };
 
 export function getNodeHeight(node: CircuitNode): number {
@@ -54,11 +57,17 @@ export function getNodeHeight(node: CircuitNode): number {
   return Math.max(60, maxPins * 30 + 10);
 }
 
+export function getNodeWidth(node: CircuitNode): number {
+  if (node.type === 'PINSLOT') return PINSLOT_WIDTH;
+  return NODE_WIDTH;
+}
+
 export function getPinPosition(node: CircuitNode, pinType: 'input' | 'output', pinIndex: number): { x: number; y: number } {
   const h = getNodeHeight(node);
+  const w = getNodeWidth(node);
   const count = pinType === 'input' ? node.inputCount : node.outputCount;
   return {
-    x: node.x + (pinType === 'input' ? 0 : NODE_WIDTH),
+    x: node.x + (pinType === 'input' ? 0 : w),
     y: node.y + (pinIndex + 1) * h / (count + 1),
   };
 }
@@ -73,6 +82,7 @@ export const GATE_STYLES: Record<string, { bg: string; border: string }> = {
   NOT: { bg: 'hsl(280 30% 32%)', border: 'hsl(280 35% 50%)' },
   INPUT: { bg: 'hsl(45 70% 20%)', border: 'hsl(45 80% 50%)' },
   OUTPUT: { bg: 'hsl(185 55% 18%)', border: 'hsl(185 70% 45%)' },
-  LED: { bg: 'hsl(228 30% 20%)', border: 'hsl(228 30% 40%)' },
+  LED: { bg: 'transparent', border: 'transparent' },
   MODULE: { bg: 'hsl(45 35% 20%)', border: 'hsl(45 40% 42%)' },
+  PINSLOT: { bg: 'hsl(228 20% 18%)', border: 'hsl(228 15% 30%)' },
 };
