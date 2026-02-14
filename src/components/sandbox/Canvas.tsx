@@ -3,13 +3,12 @@ import { useCircuit } from '@/context/CircuitContext';
 import { GateNode } from './GateNode';
 import { WireLayer } from './WireLayer';
 import { SideMenu } from './SideMenu';
-import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode } from '@/types/circuit';
-import { wouldCreateCycle } from '@/engine/evaluate';
-import { Minus, Plus, Undo2, Redo2 } from 'lucide-react';
+import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode, getNodeWidth } from '@/types/circuit';
+import { Minus, Plus, Undo2, Redo2, Trash2, Play, Pause } from 'lucide-react';
 
 export function Canvas() {
-  const { state, dispatch, nodeOutputs, undo, redo, canUndo, canRedo } = useCircuit();
-  const { nodes, connections, selectedTool, selectedModuleId, panOffset, zoom, modules } = state;
+  const { state, dispatch, nodeOutputs, cycleConnectionIds, undo, redo, canUndo, canRedo } = useCircuit();
+  const { nodes, connections, selectedTool, selectedModuleId, panOffset, zoom, modules, paused } = state;
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [connectingFrom, setConnectingFrom] = useState<{ nodeId: string; pinIndex: number; pinType: 'input' | 'output' } | null>(null);
@@ -38,7 +37,8 @@ export function Canvas() {
 
     if (selectedTool) {
       const world = screenToWorld(e.clientX, e.clientY);
-      const x = snapToGrid(world.x - NODE_WIDTH / 2);
+      const toolWidth = selectedTool === 'PINSLOT' ? 40 : NODE_WIDTH;
+      const x = snapToGrid(world.x - toolWidth / 2);
       const y = snapToGrid(world.y - 30);
 
       let newNode: CircuitNode;
@@ -83,7 +83,6 @@ export function Canvas() {
     panStartRef.current = null;
   }, []);
 
-  // Wheel zoom
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
@@ -96,17 +95,10 @@ export function Canvas() {
     return () => el.removeEventListener('wheel', handler);
   }, [dispatch]);
 
-  // Keyboard shortcuts for undo/redo
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        redo();
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -133,19 +125,14 @@ export function Canvas() {
       ? { nodeId: connectingFrom.nodeId, pinIndex: connectingFrom.pinIndex }
       : { nodeId, pinIndex };
 
-    if (wouldCreateCycle(connections, fromData.nodeId, toData.nodeId)) {
-      setConnectingFrom(null);
-      setMouseWorldPos(null);
-      return;
-    }
-
+    // Allow all connections - cycles will be detected and shown in red
     dispatch({
       type: 'ADD_CONNECTION',
       connection: { id: crypto.randomUUID(), fromNodeId: fromData.nodeId, fromPinIndex: fromData.pinIndex, toNodeId: toData.nodeId, toPinIndex: toData.pinIndex },
     });
     setConnectingFrom(null);
     setMouseWorldPos(null);
-  }, [connectingFrom, connections, dispatch]);
+  }, [connectingFrom, dispatch]);
 
   const getInputValues = useCallback((nodeId: string, inputCount: number): boolean[] => {
     return Array.from({ length: inputCount }, (_, i) => {
@@ -154,6 +141,16 @@ export function Canvas() {
       return false;
     });
   }, [connections, nodeOutputs]);
+
+  const clearCanvas = () => {
+    if (nodes.length === 0 || confirm('Clear all nodes and connections?')) {
+      dispatch({ type: 'CLEAR_CANVAS' });
+    }
+  };
+
+  const togglePause = () => {
+    dispatch({ type: 'SET_PAUSED', paused: !paused });
+  };
 
   return (
     <div className="relative w-full h-screen overflow-hidden" style={{ backgroundColor: 'hsl(228 20% 7%)', touchAction: 'none' }}>
@@ -165,7 +162,6 @@ export function Canvas() {
         onPointerUp={handlePointerUp}
       >
         <div style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'absolute', top: 0, left: 0 }}>
-          {/* Grid */}
           <div
             style={{
               position: 'absolute', width: 20000, height: 20000, left: -10000, top: -10000,
@@ -176,6 +172,7 @@ export function Canvas() {
           />
           <WireLayer
             nodes={nodes} connections={connections} nodeOutputs={nodeOutputs}
+            cycleConnectionIds={cycleConnectionIds}
             connectingFrom={connectingFrom} mouseWorldPos={mouseWorldPos}
             onDeleteConnection={(id) => dispatch({ type: 'REMOVE_CONNECTION', id })}
           />
@@ -199,28 +196,9 @@ export function Canvas() {
 
       <SideMenu />
 
-      {selectedTool && (
-        <div
-          className="fixed top-4 left-20 z-30 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
-          style={{ backgroundColor: 'hsl(152 60% 30%)', color: 'hsl(152 60% 95%)', border: '1px solid hsl(152 60% 40%)' }}
-        >
-          Click to place: {selectedTool}
-          <button className="hover:opacity-70 ml-1" onClick={() => dispatch({ type: 'SET_TOOL', tool: null })}>✕</button>
-        </div>
-      )}
-
-      {connectingFrom && (
-        <div
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg text-sm font-medium"
-          style={{ backgroundColor: 'hsl(45 80% 25%)', color: 'hsl(45 80% 85%)', border: '1px solid hsl(45 80% 40%)' }}
-        >
-          Click a {connectingFrom.pinType === 'output' ? 'input' : 'output'} pin to connect • Click empty space to cancel
-        </div>
-      )}
-
-      {/* Undo / Redo buttons */}
+      {/* Top-right toolbar */}
       <div
-        className="fixed bottom-4 left-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
+        className="fixed top-4 right-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
         style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}
       >
         <button
@@ -241,7 +219,59 @@ export function Canvas() {
         >
           <Redo2 size={16} />
         </button>
+        <div className="w-px h-5 mx-1" style={{ backgroundColor: 'hsl(228 15% 22%)' }} />
+        <button
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
+          style={{ color: paused ? 'hsl(152 70% 55%)' : 'hsl(45 80% 55%)' }}
+          onClick={togglePause}
+          title={paused ? 'Resume simulation' : 'Pause simulation'}
+        >
+          {paused ? <Play size={16} /> : <Pause size={16} />}
+        </button>
+        <button
+          className="w-8 h-8 flex items-center justify-center rounded transition-colors"
+          style={{ color: 'hsl(0 60% 55%)' }}
+          onClick={clearCanvas}
+          title="Clear canvas"
+        >
+          <Trash2 size={16} />
+        </button>
       </div>
+
+      {/* Cycle warning */}
+      {cycleConnectionIds.length > 0 && (
+        <div
+          className="fixed top-16 right-4 z-30 px-4 py-2 rounded-lg text-xs font-medium max-w-64"
+          style={{ backgroundColor: 'hsl(0 50% 15%)', color: 'hsl(0 70% 70%)', border: '1px solid hsl(0 40% 30%)' }}
+        >
+          ⚠ Cycle detected — {cycleConnectionIds.length} connection{cycleConnectionIds.length > 1 ? 's' : ''} shown in red. Remove cyclic wires to resume.
+          <button
+            className="ml-2 underline opacity-70 hover:opacity-100"
+            onClick={() => dispatch({ type: 'SET_PAUSED', paused: false })}
+          >
+            Force resume
+          </button>
+        </div>
+      )}
+
+      {selectedTool && (
+        <div
+          className="fixed top-4 left-20 z-30 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+          style={{ backgroundColor: 'hsl(152 60% 30%)', color: 'hsl(152 60% 95%)', border: '1px solid hsl(152 60% 40%)' }}
+        >
+          Click to place: {selectedTool}
+          <button className="hover:opacity-70 ml-1" onClick={() => dispatch({ type: 'SET_TOOL', tool: null })}>✕</button>
+        </div>
+      )}
+
+      {connectingFrom && (
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg text-sm font-medium"
+          style={{ backgroundColor: 'hsl(45 80% 25%)', color: 'hsl(45 80% 85%)', border: '1px solid hsl(45 80% 40%)' }}
+        >
+          Click a {connectingFrom.pinType === 'output' ? 'input' : 'output'} pin to connect • Click empty space to cancel
+        </div>
+      )}
 
       {/* Zoom controls */}
       <div

@@ -72,6 +72,15 @@ export function evaluateCircuit(
       case 'LED':
         outputs[nodeId] = [inputValues[0] ?? false];
         break;
+      case 'PINSLOT': {
+        // Pass-through: each output = corresponding input
+        const result: boolean[] = [];
+        for (let i = 0; i < node.outputCount; i++) {
+          result.push(inputValues[i] ?? false);
+        }
+        outputs[nodeId] = result;
+        break;
+      }
       case 'MODULE': {
         const moduleDef = modules.find(m => m.id === node.moduleId);
         if (moduleDef) {
@@ -87,7 +96,6 @@ export function evaluateCircuit(
           const internalOutputs = evaluateCircuit(internalNodes, moduleDef.connections, modules);
           const result: boolean[] = [];
           for (const outId of moduleDef.outputNodeIds) {
-            // OUTPUT nodes have 1 input, their value is that input
             result.push((internalOutputs[outId] || [])[0] ?? false);
           }
           outputs[nodeId] = result;
@@ -104,6 +112,46 @@ export function evaluateCircuit(
   return outputs;
 }
 
+export function detectCycleConnections(
+  nodes: CircuitNode[],
+  connections: Connection[]
+): string[] {
+  const inDegree: Record<string, number> = {};
+  const adj: Record<string, Set<string>> = {};
+
+  for (const node of nodes) {
+    inDegree[node.id] = 0;
+    adj[node.id] = new Set();
+  }
+  for (const conn of connections) {
+    if (adj[conn.fromNodeId] && inDegree[conn.toNodeId] !== undefined) {
+      adj[conn.fromNodeId].add(conn.toNodeId);
+      inDegree[conn.toNodeId]++;
+    }
+  }
+
+  const queue: string[] = [];
+  for (const id in inDegree) {
+    if (inDegree[id] === 0) queue.push(id);
+  }
+
+  const processed = new Set<string>();
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    processed.add(id);
+    for (const next of adj[id]) {
+      inDegree[next]--;
+      if (inDegree[next] === 0) queue.push(next);
+    }
+  }
+
+  const cycleNodes = new Set(nodes.filter(n => !processed.has(n.id)).map(n => n.id));
+
+  return connections
+    .filter(c => cycleNodes.has(c.fromNodeId) && cycleNodes.has(c.toNodeId))
+    .map(c => c.id);
+}
+
 export function wouldCreateCycle(
   connections: Connection[],
   fromNodeId: string,
@@ -115,16 +163,15 @@ export function wouldCreateCycle(
     if (!adj[conn.fromNodeId]) adj[conn.fromNodeId] = [];
     adj[conn.fromNodeId].push(conn.toNodeId);
   }
-  // BFS from toNodeId: can we reach fromNodeId?
   const visited = new Set<string>();
-  const queue = [toNodeId];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
+  const q = [toNodeId];
+  while (q.length > 0) {
+    const current = q.shift()!;
     if (current === fromNodeId) return true;
     if (visited.has(current)) continue;
     visited.add(current);
     for (const next of adj[current] || []) {
-      queue.push(next);
+      q.push(next);
     }
   }
   return false;
