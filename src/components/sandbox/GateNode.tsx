@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { CircuitNode, getNodeDimensions, snapToGrid, GATE_STYLES, LedShape } from '@/types/circuit';
-import { X, Settings, RotateCw } from 'lucide-react';
+import { X, Settings } from 'lucide-react';
 
 interface GateNodeProps {
   node: CircuitNode;
@@ -34,7 +34,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
 
   const pinSize = isConnecting ? 16 : 10;
 
-  // Close settings on outside click
   useEffect(() => {
     if (!showSettings) return;
     const handler = (e: MouseEvent) => {
@@ -90,19 +89,19 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
       let namePosStyle: React.CSSProperties = {};
 
       if (node.type === 'PINBAR') {
-        if (rot === 0) { // vertical, pins right
+        if (rot === 0) {
           left = width - offset;
           top = (i + 1) * height / (count + 1) - offset;
           namePosStyle = { left: -4, top: top + offset - 5, right: undefined, transform: 'translateX(-100%)', fontSize: 8, whiteSpace: 'nowrap' as const };
-        } else if (rot === 90) { // horizontal, pins bottom
+        } else if (rot === 90) {
           left = (i + 1) * width / (count + 1) - offset;
           top = height - offset;
           namePosStyle = { left: left + offset, top: -12, transform: 'translateX(-50%)', fontSize: 8, whiteSpace: 'nowrap' as const };
-        } else if (rot === 180) { // vertical, pins left
+        } else if (rot === 180) {
           left = -offset;
           top = (i + 1) * height / (count + 1) - offset;
           namePosStyle = { left: width + 4, top: top + offset - 5, fontSize: 8, whiteSpace: 'nowrap' as const };
-        } else { // 270, horizontal, pins top
+        } else {
           left = (i + 1) * width / (count + 1) - offset;
           top = -offset;
           namePosStyle = { left: left + offset, top: height + 2, transform: 'translateX(-50%)', fontSize: 8, whiteSpace: 'nowrap' as const };
@@ -128,7 +127,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
             : { left: left + offset, top: -12, transform: 'translateX(-50%)', fontSize: 8, whiteSpace: 'nowrap' as const };
         }
       } else {
-        // Default: inputs left, outputs right
         left = type === 'input' ? -offset : width - offset;
         top = (i + 1) * height / (count + 1) - offset;
         namePosStyle = type === 'input'
@@ -158,7 +156,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
     });
   };
 
-  // Settings panel content
   const renderSettingsPanel = () => {
     const names = node.pinNames || {};
     const setPinName = (key: string, value: string) => {
@@ -172,11 +169,10 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
         style={{
           top: height + 8, left: -20, width: 220,
           backgroundColor: 'hsl(228 18% 14%)', border: '1px solid hsl(228 15% 24%)',
-          zIndex: 100,
+          zIndex: 9999,
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Pin names toggle */}
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -184,13 +180,12 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
             onChange={(e) => onUpdateNode(node.id, { showPinNames: e.target.checked })}
             className="accent-emerald-500"
           />
-          <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'hsl(215 10% 50%)' }}>Show pin names</span>
+          <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'hsl(215 10% 50%)' }}>Pin isimlerini göster</span>
         </label>
 
-        {/* Rotation (PinBar & Module) */}
         {(node.type === 'PINBAR' || node.type === 'MODULE') && (
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Rotation: {rot}°</label>
+            <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Döndürme: {rot}°</label>
             <div className="flex gap-1">
               {[0, 90, 180, 270].map(r => (
                 <button
@@ -209,11 +204,10 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
           </div>
         )}
 
-        {/* PinBar specific: mode & count */}
         {node.type === 'PINBAR' && (
           <>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Mode</label>
+              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Mod</label>
               <div className="flex gap-1">
                 {(['input', 'output'] as const).map(mode => (
                   <button
@@ -239,7 +233,7 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>
-                Pin count: {Math.max(node.inputCount, node.outputCount)}
+                Pin sayısı: {Math.max(node.inputCount, node.outputCount)}
               </label>
               <input
                 type="range" min={1} max={16} value={Math.max(node.inputCount, node.outputCount)}
@@ -259,11 +253,10 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
           </>
         )}
 
-        {/* LED specific */}
         {node.type === 'LED' && (
           <>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Color</label>
+              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Renk</label>
               <div className="flex gap-1 flex-wrap">
                 {LED_COLORS.map(color => (
                   <button key={color} className="w-6 h-6 rounded-full border-2"
@@ -274,7 +267,7 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
               </div>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Shape</label>
+              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Şekil</label>
               <div className="flex gap-1">
                 {LED_SHAPES.map(s => (
                   <button key={s.value} className="w-8 h-8 rounded flex items-center justify-center text-sm"
@@ -289,22 +282,21 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
               </div>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Size: {node.ledSize || 18}px</label>
+              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Boyut: {node.ledSize || 18}px</label>
               <input type="range" min={8} max={40} value={node.ledSize || 18} className="w-full h-1 rounded-lg appearance-none cursor-pointer" style={{ accentColor: 'hsl(152 60% 45%)' }}
                 onChange={(e) => onUpdateNode(node.id, { ledSize: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Rotation: {node.ledRotation || 0}°</label>
+              <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Döndürme: {node.ledRotation || 0}°</label>
               <input type="range" min={0} max={360} step={15} value={node.ledRotation || 0} className="w-full h-1 rounded-lg appearance-none cursor-pointer" style={{ accentColor: 'hsl(152 60% 45%)' }}
                 onChange={(e) => onUpdateNode(node.id, { ledRotation: Number(e.target.value) })} />
             </div>
           </>
         )}
 
-        {/* Input pin names */}
         {node.inputCount > 0 && (
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Input pins</label>
+            <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Giriş pinleri</label>
             <div className="space-y-1">
               {Array.from({ length: node.inputCount }, (_, i) => (
                 <input
@@ -319,10 +311,9 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
           </div>
         )}
 
-        {/* Output pin names */}
         {node.outputCount > 0 && (
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Output pins</label>
+            <label className="text-[10px] uppercase tracking-wider font-semibold block mb-1" style={{ color: 'hsl(215 10% 50%)' }}>Çıkış pinleri</label>
             <div className="space-y-1">
               {Array.from({ length: node.outputCount }, (_, i) => (
                 <input
@@ -377,6 +368,20 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
     }
   };
 
+  // Get display label for INPUT/OUTPUT nodes
+  const getNodeLabel = () => {
+    const names = node.pinNames || {};
+    if (node.type === 'INPUT') {
+      const customName = names['output-0'];
+      return customName || 'Input';
+    }
+    if (node.type === 'OUTPUT') {
+      const customName = names['input-0'];
+      return customName || 'Output';
+    }
+    return node.label;
+  };
+
   // ===== PINBAR RENDERING =====
   if (node.type === 'PINBAR') {
     const mode = node.pinBarMode || 'input';
@@ -387,12 +392,11 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
       <div
         ref={nodeRef}
         className="absolute select-none cursor-grab active:cursor-grabbing group"
-        style={{ left: node.x, top: node.y, width, height }}
+        style={{ left: node.x, top: node.y, width, height, zIndex: showSettings ? 9999 : undefined }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        {/* Bar line */}
         {isVerticalPinBar ? (
           <div className="absolute" style={{
             left: rot === 0 ? width - 4 : 0, top: 0,
@@ -407,27 +411,26 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
           }} />
         )}
 
-        {/* Toggle indicators for input mode */}
         {mode === 'input' && Array.from({ length: pinCount }, (_, i) => {
           const isOn = vals[i] ?? false;
           let tLeft: number, tTop: number;
           if (rot === 0) {
-            tLeft = 2; tTop = (i + 1) * height / (pinCount + 1) - 6;
+            tLeft = 0; tTop = (i + 1) * height / (pinCount + 1) - 9;
           } else if (rot === 90) {
-            tLeft = (i + 1) * width / (pinCount + 1) - 6; tTop = 2;
+            tLeft = (i + 1) * width / (pinCount + 1) - 9; tTop = 0;
           } else if (rot === 180) {
-            tLeft = width - 14; tTop = (i + 1) * height / (pinCount + 1) - 6;
+            tLeft = width - 18; tTop = (i + 1) * height / (pinCount + 1) - 9;
           } else {
-            tLeft = (i + 1) * width / (pinCount + 1) - 6; tTop = height - 14;
+            tLeft = (i + 1) * width / (pinCount + 1) - 9; tTop = height - 18;
           }
           return (
             <div
               key={`toggle-${i}`}
               className="absolute rounded cursor-pointer"
               style={{
-                left: tLeft, top: tTop, width: 12, height: 12,
+                left: tLeft, top: tTop, width: 18, height: 18,
                 backgroundColor: isOn ? 'hsl(45 90% 55%)' : 'hsl(228 10% 22%)',
-                border: `1px solid ${isOn ? 'hsl(45 90% 70%)' : 'hsl(228 10% 35%)'}`,
+                border: `2px solid ${isOn ? 'hsl(45 90% 70%)' : 'hsl(228 10% 35%)'}`,
                 zIndex: 11, transition: 'all 0.1s',
               }}
               onPointerDown={(e) => { e.stopPropagation(); onTogglePinBarPin(node.id, i); }}
@@ -435,27 +438,26 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
           );
         })}
 
-        {/* Output bar value indicators */}
         {mode === 'output' && Array.from({ length: pinCount }, (_, i) => {
           const isOn = inputValues[i] ?? false;
           let tLeft: number, tTop: number;
           if (rot === 0) {
-            tLeft = width - 14; tTop = (i + 1) * height / (pinCount + 1) - 6;
+            tLeft = width - 26; tTop = (i + 1) * height / (pinCount + 1) - 9;
           } else if (rot === 90) {
-            tLeft = (i + 1) * width / (pinCount + 1) - 6; tTop = height - 14;
+            tLeft = (i + 1) * width / (pinCount + 1) - 9; tTop = height - 26;
           } else if (rot === 180) {
-            tLeft = 2; tTop = (i + 1) * height / (pinCount + 1) - 6;
+            tLeft = 8; tTop = (i + 1) * height / (pinCount + 1) - 9;
           } else {
-            tLeft = (i + 1) * width / (pinCount + 1) - 6; tTop = 2;
+            tLeft = (i + 1) * width / (pinCount + 1) - 9; tTop = 8;
           }
           return (
             <div
               key={`val-${i}`}
               className="absolute rounded"
               style={{
-                left: tLeft, top: tTop, width: 12, height: 12,
+                left: tLeft, top: tTop, width: 18, height: 18,
                 backgroundColor: isOn ? 'hsl(152 80% 45%)' : 'hsl(228 10% 22%)',
-                border: `1px solid ${isOn ? 'hsl(152 80% 60%)' : 'hsl(228 10% 35%)'}`,
+                border: `2px solid ${isOn ? 'hsl(152 80% 60%)' : 'hsl(228 10% 35%)'}`,
                 zIndex: 11, transition: 'all 0.1s',
               }}
             />
@@ -464,7 +466,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
 
         {renderPins(mode === 'input' ? 'output' : 'input')}
 
-        {/* Delete */}
         <button
           className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
           style={{ backgroundColor: 'hsl(0 70% 50%)', color: 'white', zIndex: 20, transition: 'opacity 0.15s' }}
@@ -473,7 +474,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
           <X size={12} />
         </button>
 
-        {/* Settings */}
         <button
           className="absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
           style={{ backgroundColor: 'hsl(228 30% 35%)', color: 'white', zIndex: 20, transition: 'opacity 0.15s' }}
@@ -493,7 +493,7 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
       <div
         ref={nodeRef}
         className="absolute select-none cursor-grab active:cursor-grabbing group"
-        style={{ left: node.x, top: node.y, width, height }}
+        style={{ left: node.x, top: node.y, width, height, zIndex: showSettings ? 9999 : undefined }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -517,12 +517,84 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
     );
   }
 
+  // ===== INPUT / OUTPUT as pinbar-style =====
+  if (node.type === 'INPUT' || node.type === 'OUTPUT') {
+    const isInput = node.type === 'INPUT';
+    const isOn = isInput ? (node.inputValue ?? false) : (inputValues[0] ?? false);
+    const barColor = isInput ? 'hsl(45 70% 30%)' : 'hsl(185 55% 25%)';
+    const activeColor = isInput ? 'hsl(45 90% 55%)' : 'hsl(152 80% 45%)';
+    const activeBorder = isInput ? 'hsl(45 90% 70%)' : 'hsl(152 80% 60%)';
+    const label = getNodeLabel();
+
+    return (
+      <div
+        ref={nodeRef}
+        className="absolute select-none cursor-grab active:cursor-grabbing group"
+        style={{ left: node.x, top: node.y, width, height, zIndex: showSettings ? 9999 : undefined }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        {/* Vertical bar */}
+        <div className="absolute" style={{
+          left: isInput ? width - 4 : 0, top: 0,
+          width: 4, height: '100%',
+          backgroundColor: barColor, borderRadius: 2,
+        }} />
+
+        {/* Toggle / indicator square */}
+        <div
+          className="absolute rounded"
+          style={{
+            left: isInput ? 4 : width - 22,
+            top: height / 2 - 9,
+            width: 18, height: 18,
+            backgroundColor: isOn ? activeColor : 'hsl(228 10% 22%)',
+            border: `2px solid ${isOn ? activeBorder : 'hsl(228 10% 35%)'}`,
+            cursor: isInput ? 'pointer' : 'default',
+            zIndex: 11, transition: 'all 0.1s',
+          }}
+          onPointerDown={(e) => {
+            if (isInput) { e.stopPropagation(); onToggle(node.id); }
+          }}
+        />
+
+        {/* Label - show pin name or default */}
+        <span className="absolute text-[9px] font-bold tracking-wide pointer-events-none truncate" style={{
+          color: 'hsl(210 15% 60%)',
+          left: isInput ? 0 : width - 30,
+          top: -14,
+          width: 30,
+          textAlign: 'center',
+        }}>
+          {label}
+        </span>
+
+        {renderPins(isInput ? 'output' : 'input')}
+
+        <button className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+          style={{ backgroundColor: 'hsl(0 70% 50%)', color: 'white', zIndex: 20, transition: 'opacity 0.15s' }}
+          onPointerDown={(e) => { e.stopPropagation(); onDelete(node.id); }}>
+          <X size={12} />
+        </button>
+
+        <button className="absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+          style={{ backgroundColor: 'hsl(228 30% 35%)', color: 'white', zIndex: 20, transition: 'opacity 0.15s' }}
+          onPointerDown={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }}>
+          <Settings size={10} />
+        </button>
+
+        {showSettings && renderSettingsPanel()}
+      </div>
+    );
+  }
+
   // ===== DEFAULT GATE / MODULE RENDERING =====
   return (
     <div
       ref={nodeRef}
       className="absolute select-none cursor-grab active:cursor-grabbing group"
-      style={{ left: node.x, top: node.y, width, height }}
+      style={{ left: node.x, top: node.y, width, height, zIndex: showSettings ? 9999 : undefined }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -534,11 +606,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
         <span className="text-xs font-bold tracking-wide truncate max-w-[100px]" style={{ color: 'hsl(210 15% 88%)' }}>
           {node.label}
         </span>
-        {displayValue !== null && (
-          <span className="text-lg font-mono font-bold" style={{ color: node.type === 'INPUT' ? 'hsl(45 90% 65%)' : 'hsl(185 80% 65%)' }}>
-            {displayValue}
-          </span>
-        )}
       </div>
       {renderPins('input')}
       {renderPins('output')}
@@ -549,7 +616,6 @@ export function GateNode({ node, outputs, inputValues, zoom, isConnecting, onPin
         <X size={12} />
       </button>
 
-      {/* Settings button for MODULE and gates with pins */}
       {(node.type === 'MODULE' || node.inputCount > 0 || node.outputCount > 0) && (
         <button className="absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
           style={{ backgroundColor: 'hsl(228 30% 35%)', color: 'white', zIndex: 20, transition: 'opacity 0.15s' }}
