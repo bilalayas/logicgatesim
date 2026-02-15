@@ -3,12 +3,12 @@ import { useCircuit } from '@/context/CircuitContext';
 import { GateNode } from './GateNode';
 import { WireLayer } from './WireLayer';
 import { SideMenu } from './SideMenu';
-import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode, getNodeWidth, PINBAR_THICKNESS } from '@/types/circuit';
+import { NODE_WIDTH, GRID_SIZE, snapToGrid, GATE_CONFIGS, CircuitNode, PINBAR_THICKNESS } from '@/types/circuit';
 import { Minus, Plus, Undo2, Redo2, Trash2, Play, Pause } from 'lucide-react';
 
 export function Canvas() {
   const { state, dispatch, nodeOutputs, cycleConnectionIds, undo, redo, canUndo, canRedo } = useCircuit();
-  const { nodes, connections, selectedTool, selectedModuleId, panOffset, zoom, modules, paused } = state;
+  const { nodes, connections, selectedTool, selectedModuleId, panOffset, zoom, modules, paused, forceResumed } = state;
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [connectingFrom, setConnectingFrom] = useState<{ nodeId: string; pinIndex: number; pinType: 'input' | 'output' } | null>(null);
@@ -148,14 +148,20 @@ export function Canvas() {
   }, [connections, nodeOutputs]);
 
   const clearCanvas = () => {
-    if (nodes.length === 0 || confirm('Clear all nodes and connections?')) {
+    if (nodes.length === 0 || confirm('Tüm düğümleri ve bağlantıları temizle?')) {
       dispatch({ type: 'CLEAR_CANVAS' });
     }
   };
 
   const togglePause = () => {
-    dispatch({ type: 'SET_PAUSED', paused: !paused });
+    if (paused && !forceResumed) {
+      dispatch({ type: 'FORCE_RESUME' });
+    } else {
+      dispatch({ type: 'SET_PAUSED', paused: !paused });
+    }
   };
+
+  const isRunning = !paused || forceResumed;
 
   return (
     <div className="relative w-full h-screen overflow-hidden" style={{ backgroundColor: 'hsl(228 20% 7%)', touchAction: 'none' }}>
@@ -207,32 +213,34 @@ export function Canvas() {
         className="fixed top-4 right-4 flex items-center gap-1 rounded-lg px-2 py-1 z-30"
         style={{ backgroundColor: 'hsl(228 18% 12%)', border: '1px solid hsl(228 15% 22%)' }}
       >
-        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25" style={{ color: 'hsl(215 10% 55%)' }} disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
-        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25" style={{ color: 'hsl(215 10% 55%)' }} disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Y)"><Redo2 size={16} /></button>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25" style={{ color: 'hsl(215 10% 55%)' }} disabled={!canUndo} onClick={undo} title="Geri Al (Ctrl+Z)"><Undo2 size={16} /></button>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors disabled:opacity-25" style={{ color: 'hsl(215 10% 55%)' }} disabled={!canRedo} onClick={redo} title="Yinele (Ctrl+Y)"><Redo2 size={16} /></button>
         <div className="w-px h-5 mx-1" style={{ backgroundColor: 'hsl(228 15% 22%)' }} />
-        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: paused ? 'hsl(152 70% 55%)' : 'hsl(45 80% 55%)' }} onClick={togglePause} title={paused ? 'Resume' : 'Pause'}>
-          {paused ? <Play size={16} /> : <Pause size={16} />}
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: isRunning ? 'hsl(45 80% 55%)' : 'hsl(152 70% 55%)' }} onClick={togglePause} title={isRunning ? 'Duraklat' : 'Devam Et'}>
+          {isRunning ? <Pause size={16} /> : <Play size={16} />}
         </button>
-        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: 'hsl(0 60% 55%)' }} onClick={clearCanvas} title="Clear canvas"><Trash2 size={16} /></button>
+        <button className="w-8 h-8 flex items-center justify-center rounded transition-colors" style={{ color: 'hsl(0 60% 55%)' }} onClick={clearCanvas} title="Temizle"><Trash2 size={16} /></button>
       </div>
 
       {cycleConnectionIds.length > 0 && (
         <div className="fixed top-16 right-4 z-30 px-4 py-2 rounded-lg text-xs font-medium max-w-64" style={{ backgroundColor: 'hsl(0 50% 15%)', color: 'hsl(0 70% 70%)', border: '1px solid hsl(0 40% 30%)' }}>
-          ⚠ Cycle — {cycleConnectionIds.length} wire{cycleConnectionIds.length > 1 ? 's' : ''} in red. Remove to resume.
-          <button className="ml-2 underline opacity-70 hover:opacity-100" onClick={() => dispatch({ type: 'SET_PAUSED', paused: false })}>Force resume</button>
+          ⚠ Döngü — {cycleConnectionIds.length} kablo kırmızı ile gösterildi.
+          {!forceResumed && (
+            <button className="ml-2 underline opacity-70 hover:opacity-100" onClick={() => dispatch({ type: 'FORCE_RESUME' })}>Zorla devam et</button>
+          )}
         </div>
       )}
 
       {selectedTool && (
         <div className="fixed top-4 left-20 z-30 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2" style={{ backgroundColor: 'hsl(152 60% 30%)', color: 'hsl(152 60% 95%)', border: '1px solid hsl(152 60% 40%)' }}>
-          Click to place: {selectedTool}
+          Yerleştirmek için tıklayın: {selectedTool}
           <button className="hover:opacity-70 ml-1" onClick={() => dispatch({ type: 'SET_TOOL', tool: null })}>✕</button>
         </div>
       )}
 
       {connectingFrom && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg text-sm font-medium" style={{ backgroundColor: 'hsl(45 80% 25%)', color: 'hsl(45 80% 85%)', border: '1px solid hsl(45 80% 40%)' }}>
-          Click a {connectingFrom.pinType === 'output' ? 'input' : 'output'} pin to connect
+          Bağlamak için bir {connectingFrom.pinType === 'output' ? 'giriş' : 'çıkış'} pinine tıklayın
         </div>
       )}
 

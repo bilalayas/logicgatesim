@@ -11,6 +11,7 @@ interface CircuitState {
   panOffset: { x: number; y: number };
   zoom: number;
   paused: boolean;
+  forceResumed: boolean;
 }
 
 type Action =
@@ -29,6 +30,7 @@ type Action =
   | { type: 'CLEAR_CANVAS' }
   | { type: 'UPDATE_NODE'; id: string; updates: Partial<CircuitNode> }
   | { type: 'SET_PAUSED'; paused: boolean }
+  | { type: 'FORCE_RESUME' }
   | { type: 'TOGGLE_PINBAR_PIN'; nodeId: string; pinIndex: number };
 
 const UNDOABLE_ACTIONS = new Set([
@@ -55,10 +57,10 @@ function reducer(state: CircuitState, action: Action): CircuitState {
         c => c.toNodeId === action.connection.toNodeId && c.toPinIndex === action.connection.toPinIndex
       );
       if (exists) return state;
-      return { ...state, connections: [...state.connections, action.connection] };
+      return { ...state, connections: [...state.connections, action.connection], forceResumed: false };
     }
     case 'REMOVE_CONNECTION':
-      return { ...state, connections: state.connections.filter(c => c.id !== action.id) };
+      return { ...state, connections: state.connections.filter(c => c.id !== action.id), forceResumed: false };
     case 'TOGGLE_INPUT':
       return { ...state, nodes: state.nodes.map(n => n.id === action.id ? { ...n, inputValue: !n.inputValue } : n) };
     case 'SET_TOOL':
@@ -74,13 +76,12 @@ function reducer(state: CircuitState, action: Action): CircuitState {
     case 'LOAD_MODULES':
       return { ...state, modules: action.modules };
     case 'CLEAR_CANVAS':
-      return { ...state, nodes: [], connections: [], paused: false };
+      return { ...state, nodes: [], connections: [], paused: false, forceResumed: false };
     case 'UPDATE_NODE': {
       const existing = state.nodes.find(n => n.id === action.id);
       if (!existing) return state;
       const updated = { ...existing, ...action.updates };
       let conns = state.connections;
-      // Clean up connections if pin count decreased
       if (action.updates.inputCount !== undefined && action.updates.inputCount < existing.inputCount) {
         conns = conns.filter(c => !(c.toNodeId === action.id && c.toPinIndex >= action.updates.inputCount!));
       }
@@ -90,7 +91,9 @@ function reducer(state: CircuitState, action: Action): CircuitState {
       return { ...state, nodes: state.nodes.map(n => n.id === action.id ? updated : n), connections: conns };
     }
     case 'SET_PAUSED':
-      return { ...state, paused: action.paused };
+      return { ...state, paused: action.paused, forceResumed: false };
+    case 'FORCE_RESUME':
+      return { ...state, paused: false, forceResumed: true };
     case 'TOGGLE_PINBAR_PIN': {
       return {
         ...state,
@@ -142,6 +145,7 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     panOffset: { x: 0, y: 0 },
     zoom: 1,
     paused: false,
+    forceResumed: false,
   });
 
   const undoStack = useRef<Snapshot[]>([]);
@@ -186,18 +190,12 @@ export function CircuitProvider({ children }: { children: React.ReactNode }) {
     [state.nodes, state.connections]
   );
 
-  useEffect(() => {
-    if (cycleConnectionIds.length > 0 && !state.paused) {
-      rawDispatch({ type: 'SET_PAUSED', paused: true });
-    }
-  }, [cycleConnectionIds, state.paused]);
-
   const nodeOutputs = useMemo(() => {
-    if (state.paused) return lastOutputsRef.current;
+    if (state.paused && !state.forceResumed) return lastOutputsRef.current;
     const result = evaluateCircuit(state.nodes, state.connections, state.modules);
     lastOutputsRef.current = result;
     return result;
-  }, [state.nodes, state.connections, state.modules, state.paused]);
+  }, [state.nodes, state.connections, state.modules, state.paused, state.forceResumed]);
 
   useEffect(() => {
     const saved = localStorage.getItem('logic-sandbox-modules');

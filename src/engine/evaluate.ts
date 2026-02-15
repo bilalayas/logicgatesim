@@ -1,5 +1,63 @@
 import { CircuitNode, Connection, ModuleDefinition } from '@/types/circuit';
 
+function evaluateNode(
+  node: CircuitNode,
+  inputValues: boolean[],
+  modules: ModuleDefinition[],
+  allNodes: CircuitNode[],
+  allConnections: Connection[]
+): boolean[] {
+  switch (node.type) {
+    case 'INPUT':
+      return [node.inputValue ?? false];
+    case 'AND':
+      return [inputValues.length >= 2 && inputValues[0] && inputValues[1]];
+    case 'OR':
+      return [inputValues.length >= 2 && (inputValues[0] || inputValues[1])];
+    case 'NOT':
+      return [!inputValues[0]];
+    case 'OUTPUT':
+    case 'LED':
+      return [inputValues[0] ?? false];
+    case 'PINBAR': {
+      const mode = node.pinBarMode || 'input';
+      if (mode === 'input') {
+        const vals = node.pinBarValues || [];
+        const result: boolean[] = [];
+        for (let i = 0; i < node.outputCount; i++) {
+          result.push(vals[i] ?? false);
+        }
+        return result;
+      } else {
+        return inputValues.slice(0, node.inputCount);
+      }
+    }
+    case 'MODULE': {
+      const moduleDef = modules.find(m => m.id === node.moduleId);
+      if (moduleDef) {
+        const internalNodes = moduleDef.nodes.map(n => {
+          if (n.type === 'INPUT') {
+            const idx = moduleDef.inputNodeIds.indexOf(n.id);
+            if (idx >= 0 && idx < inputValues.length) {
+              return { ...n, inputValue: inputValues[idx] };
+            }
+          }
+          return { ...n };
+        });
+        const internalOutputs = evaluateCircuit(internalNodes, moduleDef.connections, modules);
+        const result: boolean[] = [];
+        for (const outId of moduleDef.outputNodeIds) {
+          result.push((internalOutputs[outId] || [])[0] ?? false);
+        }
+        return result;
+      }
+      return Array(node.outputCount).fill(false);
+    }
+    default:
+      return [false];
+  }
+}
+
 export function evaluateCircuit(
   nodes: CircuitNode[],
   connections: Connection[],
@@ -38,10 +96,16 @@ export function evaluateCircuit(
     }
   }
 
-  for (const nodeId of sorted) {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) continue;
+  // Collect cycle nodes (not in topological sort)
+  const cycleNodeIds: string[] = [];
+  for (const node of nodes) {
+    if (!sorted.includes(node.id)) {
+      cycleNodeIds.push(node.id);
+    }
+  }
 
+  // First pass: evaluate acyclic nodes
+  const getInputValues = (nodeId: string, node: CircuitNode) => {
     const inputValues: boolean[] = [];
     for (let i = 0; i < node.inputCount; i++) {
       const conn = connections.find(c => c.toNodeId === nodeId && c.toPinIndex === i);
@@ -51,65 +115,52 @@ export function evaluateCircuit(
         inputValues.push(false);
       }
     }
+    return inputValues;
+  };
 
-    switch (node.type) {
-      case 'INPUT':
-        outputs[nodeId] = [node.inputValue ?? false];
-        break;
-      case 'AND':
-        outputs[nodeId] = [inputValues.length >= 2 && inputValues[0] && inputValues[1]];
-        break;
-      case 'OR':
-        outputs[nodeId] = [inputValues.length >= 2 && (inputValues[0] || inputValues[1])];
-        break;
-      case 'NOT':
-        outputs[nodeId] = [!inputValues[0]];
-        break;
-      case 'OUTPUT':
-      case 'LED':
-        outputs[nodeId] = [inputValues[0] ?? false];
-        break;
-      case 'PINBAR': {
-        const mode = node.pinBarMode || 'input';
-        if (mode === 'input') {
-          // Input bar: each output = pinBarValues toggle state
-          const vals = node.pinBarValues || [];
-          const result: boolean[] = [];
-          for (let i = 0; i < node.outputCount; i++) {
-            result.push(vals[i] ?? false);
-          }
-          outputs[nodeId] = result;
-        } else {
-          // Output bar: pass through inputs
-          outputs[nodeId] = inputValues.slice(0, node.inputCount);
-        }
-        break;
+  for (const nodeId of sorted) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) continue;
+    const inputValues = getInputValues(nodeId, node);
+    outputs[nodeId] = evaluateNode(node, inputValues, modules, nodes, connections);
+  }
+
+  // Iterative evaluation for cycle nodes (SR latch support)
+  // Run multiple passes until stable or max iterations
+  if (cycleNodeIds.length > 0) {
+    // Initialize cycle nodes with false
+    for (const nodeId of cycleNodeIds) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (node && !outputs[nodeId]) {
+        outputs[nodeId] = Array(Math.max(node.outputCount, 1)).fill(false);
       }
-      case 'MODULE': {
-        const moduleDef = modules.find(m => m.id === node.moduleId);
-        if (moduleDef) {
-          const internalNodes = moduleDef.nodes.map(n => {
-            if (n.type === 'INPUT') {
-              const idx = moduleDef.inputNodeIds.indexOf(n.id);
-              if (idx >= 0 && idx < inputValues.length) {
-                return { ...n, inputValue: inputValues[idx] };
-              }
-            }
-            return { ...n };
-          });
-          const internalOutputs = evaluateCircuit(internalNodes, moduleDef.connections, modules);
-          const result: boolean[] = [];
-          for (const outId of moduleDef.outputNodeIds) {
-            result.push((internalOutputs[outId] || [])[0] ?? false);
-          }
-          outputs[nodeId] = result;
-        } else {
-          outputs[nodeId] = Array(node.outputCount).fill(false);
+    }
+
+    const MAX_ITERATIONS = 10;
+    for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+      let changed = false;
+      for (const nodeId of cycleNodeIds) {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) continue;
+        const inputValues = getInputValues(nodeId, node);
+        const newOutput = evaluateNode(node, inputValues, modules, nodes, connections);
+        const oldOutput = outputs[nodeId] || [];
+        if (newOutput.length !== oldOutput.length || newOutput.some((v, i) => v !== oldOutput[i])) {
+          changed = true;
         }
-        break;
+        outputs[nodeId] = newOutput;
       }
-      default:
-        outputs[nodeId] = [false];
+      // Also re-evaluate acyclic nodes that depend on cycle nodes
+      for (const nodeId of sorted) {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) continue;
+        const deps = inEdges[nodeId];
+        if (deps && [...deps].some(d => cycleNodeIds.includes(d))) {
+          const inputValues = getInputValues(nodeId, node);
+          outputs[nodeId] = evaluateNode(node, inputValues, modules, nodes, connections);
+        }
+      }
+      if (!changed) break;
     }
   }
 
